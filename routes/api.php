@@ -21,12 +21,14 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminController;
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/password/forgot', [AuthController::class, 'sendResetPasswordOtp']);
+Route::post('/password/reset', [AuthController::class, 'resetPassword']);
 
-Route::middleware(['auth:sanctum', 'role:admin'])->group(function() {
+Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function() {
     Route::post('/employee', [AdminController::class,'createEmployee']);
     Route::get('/employees', [AdminController::class,'employees']);
-    Route::put('/user/{id}/toggle', [AdminController::class,'toggleVerify']);
     Route::delete('/user/{id}', [AdminController::class,'deleteUser']);
+    Route::put('/employees/{id}', [AdminController::class, 'updateEmployee']);
 });
 
 Route::middleware(['auth:sanctum', 'role:super_admin'])->group(function() {
@@ -40,4 +42,13 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])->group(function() {
             'is_verified' => true
         ]);
     });
+
+});
+
+
+Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function () {
+
+    // تفعيل / تعطيل مستخدم
+    Route::patch('/user/{id}/toggle', [AdminController::class, 'toggleVerify']);
+
 });
