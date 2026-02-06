@@ -2,117 +2,71 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+
+
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use App\Services\UserService;
+use Illuminate\Support\Facades\Auth;
 
 class AdminController extends Controller
 {
-    // إنشاء موظف
+    protected $service;
+
+    public function __construct(UserService $service)
+    {
+        $this->service = $service;
+    }
+
     public function createEmployee(Request $request)
     {
         $data = $request->validate([
-            'name'=>'required',
-            'email'=>'required|email|unique:users',
-            'phone'=>'required|unique:users',
-            'password'=>'required|min:6',
+            'name' => 'required',
+            'email' => 'required|email|unique:users',
+            'phone' => 'required|unique:users',
+            'password' => 'required|min:6',
             'role' => 'required|in:raw_storekeeper,product_storekeeper,accountant,production_employee,driver',
             'contract_start_date' => 'nullable|date',
             'contract_end_date' => 'nullable|date|after_or_equal:contract_start_date',
         ]);
 
-        $data['password'] = Hash::make($data['password']);
-        $data['is_verified'] = true;
+        $user = $this->service->createEmployee($data);
 
-        $user = User::create($data);
-
-        return response()->json(['message'=>'تم إنشاء الموظف','data'=>$user]);
+        return response()->json(['message' => 'تم إنشاء الموظف', 'data' => $user]);
     }
 
-// عرض الموظفين
     public function employees()
     {
-        return User::whereNotIn('role', ['super_admin'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $users = $this->service->getEmployees();
+        return response()->json(['data' => $users]);
     }
 
-
-// تفعيل / تعطيل
     public function toggleVerify($id)
     {
-        $authUser = auth()->user();        // المستخدم اللي عامل الطلب
-        $targetUser = User::findOrFail($id); // المستخدم المطلوب تفعيله/تعطيله
+        $authUser = Auth::user();
+        $user = $this->service->toggleVerify($id, $authUser);
 
-        // 1️⃣ ممنوع أي شخص يعطل نفسه
-        if ($authUser->id === $targetUser->id) {
-            return response()->json([
-                'message' => 'لا يمكنك تعطيل حسابك'
-            ], 403);
-        }
-
-        // 2️⃣ إذا كان Admin
-        if ($authUser->role === 'admin') {
-
-            // ممنوع يعطّل Admin أو Super Admin
-            if (in_array($targetUser->role, ['admin', 'super_admin'])) {
-                return response()->json([
-                    'message' => 'لا يمكنك تعديل حساب إداري'
-                ], 403);
-            }
-        }
-
-        // 3️⃣ إذا كان Super Admin
-        if ($authUser->role === 'super_admin') {
-
-            // ممنوع يعطّل Super Admin ثاني
-            if ($targetUser->role === 'super_admin') {
-                return response()->json([
-                    'message' => 'لا يمكنك تعطيل Super Admin'
-                ], 403);
-            }
-        }
-
-        // 4️⃣ تنفيذ التفعيل / التعطيل
-        $targetUser->is_verified = !$targetUser->is_verified;
-        $targetUser->save();
-
-        return response()->json([
-            'message' => 'تم التعديل بنجاح',
-            'data' => $targetUser
-        ]);
+        return response()->json(['message'=>'تم التعديل بنجاح','data'=>$user]);
     }
 
-
-// حذف
     public function deleteUser($id)
     {
-        User::findOrFail($id)->delete();
+        $this->service->deleteUser($id);
         return response()->json(['message'=>'تم الحذف']);
     }
+
     public function updateEmployee(Request $request, $id)
     {
-        $user = User::findOrFail($id);
-
         $data = $request->validate([
             'name' => 'sometimes|required',
-            'email' => 'sometimes|required|email|unique:users,email,'.$user->id,
-            'phone' => 'sometimes|required|unique:users,phone,'.$user->id,
+            'email' => 'sometimes|required|email|unique:users,email,'.$id,
+            'phone' => 'sometimes|required|unique:users,phone,'.$id,
             'password' => 'nullable|min:6',
             'role' => 'sometimes|required|in:raw_storekeeper,product_storekeeper,accountant,production_employee,driver',
             'contract_start_date' => 'nullable|date',
             'contract_end_date' => 'nullable|date|after_or_equal:contract_start_date',
         ]);
 
-        if(isset($data['password'])) {
-            $data['password'] = Hash::make($data['password']);
-        } else {
-            unset($data['password']);
-        }
-
-        $user->update($data);
-
+        $user = $this->service->updateEmployee($id, $data);
         return response()->json(['message'=>'تم تحديث بيانات الموظف بنجاح','data'=>$user]);
     }
-
 }
