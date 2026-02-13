@@ -9,7 +9,7 @@ class RawMaterialBatch extends Model
     use HasFactory;
 
     protected $fillable = [
-        'raw_material_id','batch_number','quantity','expiry_date'
+        'raw_material_id','batch_number','quantity','expiry_date','received_at','remaining_quantity'
     ];
 
     public function rawMaterial()
@@ -23,6 +23,11 @@ class RawMaterialBatch extends Model
             ProductionOrder::class,
             'production_materials'
         )->withPivot('quantity');
+    }
+
+    public function scopeAvailable($query)
+    {
+        return $query->where('remaining_quantity', '>', 0)->orderBy('received_at', 'asc');
     }
 
     public function waste()

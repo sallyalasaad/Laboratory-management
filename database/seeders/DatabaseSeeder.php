@@ -38,5 +38,7 @@ class DatabaseSeeder extends Seeder
         $admin->syncRoles(['admin']);
 
         $this->command->info('✅ تم إنشاء المستخدمين وربط الأدوار بنجاح');
+        // 4️⃣ بيانات المواد الأولية الأساسية
+        $this->call(RawMaterialSeeder::class);
     }
 }

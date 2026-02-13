@@ -48,3 +48,18 @@ Route::middleware(['auth:sanctum', 'role:super_admin'])
             'data'    => $user
         ]);
     });
+
+
+// Raw material tasks: create by admin, handled by warehouse user
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/tasks/raw-materials/receive', [\App\Http\Controllers\RawMaterialTaskController::class, 'createReceiveTask']);
+    Route::post('/tasks/raw-materials/send', [\App\Http\Controllers\RawMaterialTaskController::class, 'createSendTask']);
+
+    // warehouse endpoints
+    Route::get('/tasks/raw-materials', [\App\Http\Controllers\RawMaterialTaskController::class, 'listTasks']);
+    Route::post('/tasks/raw-materials/{id}/confirm-receive', [\App\Http\Controllers\RawMaterialTaskController::class, 'confirmReceive']);
+    Route::post('/tasks/raw-materials/{id}/confirm-send', [\App\Http\Controllers\RawMaterialTaskController::class, 'confirmSend']);
+
+    // inventory summary
+    Route::get('/inventory/summary', [\App\Http\Controllers\RawMaterialTaskController::class, 'inventorySummary']);
+});
