@@ -29,9 +29,11 @@ class RawMaterialInventoryService
 
                 $take = min($batch->remaining_quantity, $remaining);
 
-                // update batch
-                $batch->remaining_quantity = $batch->remaining_quantity - $take;
-                $batch->save();
+                // atomically decrement remaining_quantity to avoid race conditions
+                RawMaterialBatch::where('id', $batch->id)->decrement('remaining_quantity', $take);
+
+                // reload batch to get current remaining (not strictly necessary for allocation result)
+                $batch->refresh();
 
                 $allocations[] = [
                     'batch_id' => $batch->id,
