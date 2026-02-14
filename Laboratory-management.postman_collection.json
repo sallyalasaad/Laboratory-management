@@ -1,0 +1,100 @@
+{
+  "info": {
+    "name": "Laboratory-management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/login", "host": ["{{baseUrl}}"], "path": ["api","login"] }
+      }
+    },
+    {
+      "name": "Create Receive Task (admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": 5,\n  \"scheduled_at\": \"2026-02-20 10:00:00\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tasks/raw-materials/receive", "host": ["{{baseUrl}}"], "path": ["api","tasks","raw-materials","receive"] }
+      }
+    },
+    {
+      "name": "Confirm Receive (warehouse)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    { \"raw_material_id\": 1, \"quantity\": 10, \"batch_number\": \"B-001\" }\n  ]\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tasks/raw-materials/123/confirm-receive", "host": ["{{baseUrl}}"], "path": ["api","tasks","raw-materials","123","confirm-receive"] }
+      }
+    },
+    {
+      "name": "Create Send To Production (admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": 5,\n  \"items\": [\n    { \"raw_material_id\": 1, \"quantity\": 5 }\n  ]\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tasks/raw-materials/send", "host": ["{{baseUrl}}"], "path": ["api","tasks","raw-materials","send"] }
+      }
+    },
+    {
+      "name": "Confirm Send To Production (warehouse)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/tasks/raw-materials/456/confirm-send", "host": ["{{baseUrl}}"], "path": ["api","tasks","raw-materials","456","confirm-send"] }
+      }
+    },
+    {
+      "name": "List Warehouse Tasks",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/tasks/raw-materials", "host": ["{{baseUrl}}"], "path": ["api","tasks","raw-materials"] }
+      }
+    },
+    {
+      "name": "Inventory Summary",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/inventory/summary", "host": ["{{baseUrl}}"], "path": ["api","inventory","summary"] }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000" },
+    { "key": "token", "value": "" }
+  ]
+}

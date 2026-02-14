@@ -1,54 +1,65 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
-*/
-
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AuthController;
 
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/password/forgot', [AuthController::class, 'sendResetPasswordOtp']);
-Route::post('/password/reset', [AuthController::class, 'resetPassword']);
+// تسجيل الدخول
+Route::post('/login', [AuthController::class,'login']);
+Route::post('/password/forgot', [AuthController::class,'sendResetPasswordOtp']);
+Route::post('/password/reset', [AuthController::class,'resetPassword']);
 
-Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function() {
+
+// Admin + Super Admin
+Route::middleware(['auth:sanctum', 'role:admin|super_admin'])->group(function () {
+
     Route::post('/employee', [AdminController::class,'createEmployee']);
     Route::get('/employees', [AdminController::class,'employees']);
+    Route::put('/employees/{id}', [AdminController::class,'updateEmployee']);
     Route::delete('/user/{id}', [AdminController::class,'deleteUser']);
-    Route::put('/employees/{id}', [AdminController::class, 'updateEmployee']);
+    Route::patch('/user/{id}/toggle', [AdminController::class,'toggleVerify']);
+
 });
 
-Route::middleware(['auth:sanctum', 'role:super_admin'])->group(function() {
-    Route::post('/create-admin', function(Request $request){
-        return \App\Models\User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'password' => bcrypt($request->password),
-            'role' => 'admin',
+
+// فقط Super Admin
+Route::middleware(['auth:sanctum', 'role:super_admin'])
+    ->post('/create-admin', function (\Illuminate\Http\Request $request) {
+
+        $request->validate([
+            'name'     => 'required|string',
+            'email'    => 'required|email|unique:users',
+            'phone'    => 'required|unique:users',
+            'password' => 'required|min:6'
+        ]);
+
+        $user = \App\Models\User::create([
+            'name'        => $request->name,
+            'email'       => $request->email,
+            'phone'       => $request->phone,
+            'password'    => bcrypt($request->password),
             'is_verified' => true
+        ]);
+
+        $user->assignRole('admin');
+
+        return response()->json([
+            'message' => 'تم إنشاء مدير بنجاح',
+            'data'    => $user
         ]);
     });
 
-});
 
+// Raw material tasks: create by admin, handled by warehouse user
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/tasks/raw-materials/receive', [\App\Http\Controllers\RawMaterialTaskController::class, 'createReceiveTask']);
+    Route::post('/tasks/raw-materials/send', [\App\Http\Controllers\RawMaterialTaskController::class, 'createSendTask']);
 
-Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function () {
+    // warehouse endpoints
+    Route::get('/tasks/raw-materials', [\App\Http\Controllers\RawMaterialTaskController::class, 'listTasks']);
+    Route::post('/tasks/raw-materials/{id}/confirm-receive', [\App\Http\Controllers\RawMaterialTaskController::class, 'confirmReceive']);
+    Route::post('/tasks/raw-materials/{id}/confirm-send', [\App\Http\Controllers\RawMaterialTaskController::class, 'confirmSend']);
 
-    // تفعيل / تعطيل مستخدم
-    Route::patch('/user/{id}/toggle', [AdminController::class, 'toggleVerify']);
-
+    // inventory summary
+    Route::get('/inventory/summary', [\App\Http\Controllers\RawMaterialTaskController::class, 'inventorySummary']);
 });
