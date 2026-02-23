@@ -57,9 +57,20 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // warehouse endpoints
     Route::get('/tasks/raw-materials', [\App\Http\Controllers\RawMaterialTaskController::class, 'listTasks']);
+    Route::middleware(['role:admin|super_admin'])->get('/tasks/raw-materials/admin', [\App\Http\Controllers\RawMaterialTaskController::class, 'adminListTasks']);
+    // Warehouse: submit receive input (does not change inventory yet)
+    Route::post('/tasks/raw-materials/{id}/submit-receive-input', [\App\Http\Controllers\RawMaterialTaskController::class, 'submitReceiveInput']);
+
+    // Warehouse: confirm the receive to actually update inventory
     Route::post('/tasks/raw-materials/{id}/confirm-receive', [\App\Http\Controllers\RawMaterialTaskController::class, 'confirmReceive']);
     Route::post('/tasks/raw-materials/{id}/confirm-send', [\App\Http\Controllers\RawMaterialTaskController::class, 'confirmSend']);
 
     // inventory summary
     Route::get('/inventory/summary', [\App\Http\Controllers\RawMaterialTaskController::class, 'inventorySummary']);
+
+    // Notes for raw material tasks
+    Route::post('/tasks/raw-materials/{id}/notes', [\App\Http\Controllers\RawMaterialTaskController::class, 'addNote']);
+    Route::middleware(['role:admin|super_admin'])->get('/tasks/raw-materials/{id}/notes', [\App\Http\Controllers\RawMaterialTaskController::class, 'adminListNotes']);
+    Route::middleware(['role:admin|super_admin'])->patch('/tasks/raw-materials/notes/{noteId}/mark-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'markNoteRead']);
+    Route::middleware(['role:admin|super_admin'])->delete('/tasks/raw-materials/{id}/notes/delete-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'deleteReadNotes']);
 });
