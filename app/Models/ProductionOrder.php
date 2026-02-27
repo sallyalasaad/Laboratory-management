@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 class ProductionOrder extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'order_number','user_id','status','start_date','end_date'
     ];

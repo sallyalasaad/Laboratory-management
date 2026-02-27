@@ -7,11 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class FinishedProductBatch extends Model
 {
     use HasFactory;
+    protected $fillable = ['finished_product_id','production_order_id','batch_number','quantity','production_date','expiry_date'];
 
-    protected $fillable = [
-        'finished_product_id','production_order_id',
-        'batch_number','quantity','expiry_date'
-    ];
 
     public function finishedProduct()
     {
@@ -44,4 +41,5 @@ class FinishedProductBatch extends Model
         return $this->hasMany(Waste::class);
     }
 }
+
 

@@ -12,11 +12,14 @@ return new class extends Migration
     public function up(): void
     {Schema::create('production_stages', function (Blueprint $table) {
         $table->id();
-        $table->foreignId('production_order_id')->constrained()->cascadeOnDelete();
-        $table->string('stage_name');
-        $table->string('status')->default('pending');
+        $table->foreignId('production_order_id')->constrained();
+        $table->string('stage_name'); // تحضير، طبخ، تعبئة، تبريد، إنهاء
+        $table->enum('status', ['pending', 'active', 'done'])->default('pending');
+        $table->timestamp('start_date')->nullable();
+        $table->timestamp('end_date')->nullable();
         $table->timestamps();
     });
+
 
     }
 

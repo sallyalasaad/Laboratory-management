@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\FinishedProductBatchController;
+use App\Http\Controllers\ProductionStageController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
-
+use App\Http\Controllers\ProductionOrderController;
 // تسجيل الدخول
 Route::post('/login', [AuthController::class,'login']);
 Route::post('/password/forgot', [AuthController::class,'sendResetPasswordOtp']);
@@ -74,3 +76,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['role:admin|super_admin'])->patch('/tasks/raw-materials/notes/{noteId}/mark-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'markNoteRead']);
     Route::middleware(['role:admin|super_admin'])->delete('/tasks/raw-materials/{id}/notes/delete-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'deleteReadNotes']);
 });
+
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/production-orders', [ProductionOrderController::class, 'create']);
+    Route::get('/production-orders', [ProductionOrderController::class, 'listOrders']);
+});
+Route::post('/production-orders/{orderId}/start', [ProductionStageController::class, 'startOrder']);
+Route::post('/production-stages/{stageId}/complete', [ProductionStageController::class, 'completeStage']);
+Route::post('/production-orders/{orderId}/pause', [ProductionStageController::class, 'pauseOrder']);
+Route::post('/production-orders/{orderId}/resume', [ProductionStageController::class, 'resumeOrder']);
+Route::post('/finished-product-batches', [FinishedProductBatchController::class, 'create']);
+Route::get('/production-orders/{orderId}/batches', [FinishedProductBatchController::class, 'list']);
