@@ -13,12 +13,13 @@ return new class extends Migration
     {Schema::create('production_orders', function (Blueprint $table) {
         $table->id();
         $table->string('order_number')->unique();
-        $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-        $table->string('status')->default('pending');
-        $table->date('start_date')->nullable();
-        $table->date('end_date')->nullable();
+        $table->foreignId('user_id')->constrained(); // الموظف المسؤول
+        $table->enum('status', ['pending', 'in_progress', 'paused', 'rejected', 'completed'])->default('pending');
+        $table->timestamp('start_date')->nullable();
+        $table->timestamp('end_date')->nullable();
         $table->timestamps();
     });
+
 
     }
 

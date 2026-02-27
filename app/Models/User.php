@@ -13,7 +13,10 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
     protected $guard_name = 'sanctum'; // مهم جداً للـ Spatie مع Sanctum
-
+    public function getRoleAttribute()
+    {
+        return $this->getRoleNames()->first();
+    }
     protected $fillable = [
         'name',
         'email',
@@ -25,6 +28,7 @@ class User extends Authenticatable
         'otp',
         'otp_created_at'
     ];
+    protected $appends = ['role'];
 
     protected $hidden = [
         'password',
