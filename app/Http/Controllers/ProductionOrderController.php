@@ -20,7 +20,6 @@ class ProductionOrderController extends Controller
             'user_id' => 'required|integer|exists:users,id',
             'finished_product_id' => 'required|integer|exists:finished_products,id',
             'quantity' => 'required|numeric|min:0.01',
-            'batch_number' => 'required|string',
             'note' => 'nullable|string'
         ]);
 
@@ -28,12 +27,15 @@ class ProductionOrderController extends Controller
             $request->user_id,
             $request->finished_product_id,
             $request->quantity,
-            $request->batch_number,
             $request->note
         );
 
-        return response()->json(['message' => 'Production order created', 'order' => $order], 201);
+        return response()->json([
+            'message' => 'Production order created',
+            'order' => $order
+        ], 201);
     }
+
     public function listOrders()
     {
         $orders = $this->service->listOrders();

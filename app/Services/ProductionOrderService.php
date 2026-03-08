@@ -3,6 +3,7 @@ namespace App\Services;
 
 use App\DAO\ProductionOrderDAO;
 use App\Models\ProductionStage;
+use Illuminate\Support\Facades\DB;
 
 class ProductionOrderService
 {
@@ -13,28 +14,31 @@ class ProductionOrderService
         $this->dao = $dao;
     }
 
-    public function createOrder($userId, $finishedProductId, $quantity, $batchNumber, $note = null)
+
+    public function createOrder($userId, $finishedProductId, $quantity, $note = null)
     {
-        $order = $this->dao->create([
-            'user_id' => $userId,
-            'finished_product_id' => $finishedProductId,
-            'quantity' => $quantity,
-            'status' => 'pending',
-            'note' => $note
-        ]);
-
-        $stages = ['تحضير', 'طبخ', 'تعبئة', 'تبريد', 'إنهاء'];
-        foreach ($stages as $index => $stage) {
-            ProductionStage::create([
-                'production_order_id' => $order->id,
-                'stage_name' => $stage,
-                'status' => $index === 0 ? 'active' : 'pending'
+        return DB::transaction(function () use ($userId, $finishedProductId, $quantity, $note) {
+            $order = $this->dao->create([
+                'user_id' => $userId,
+                'finished_product_id' => $finishedProductId,
+                'quantity' => $quantity,
+                'status' => 'pending',
+                'note' => $note
             ]);
-        }
 
-        return $order;
+            $stages = ['تحضير', 'طبخ', 'تعبئة', 'تبريد', 'إنهاء'];
+
+            foreach ($stages as $index => $stage) {
+                ProductionStage::create([
+                    'production_order_id' => $order->id,
+                    'stage_name' => $stage,
+                    'status' => $index === 0 ? 'active' : 'pending'
+                ]);
+            }
+
+            return $order;
+        });
     }
-
     public function getOrderWithStages($orderId)
     {
         return $this->dao->findById($orderId)->load('stages');

@@ -34,7 +34,7 @@ class FinishedProductBatchController extends Controller
         return response()->json(['message'=>'Batch created','batch'=>$batch],201);
     }
 
-    public function list($orderId)
+    public function list1($orderId)
     {
         return response()->json($this->service->getBatchesByOrder($orderId));
     }

@@ -12,8 +12,22 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('distribution_items', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
+            Schema::create('distribution_items', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('distribution_task_id');
+                $table->unsignedBigInteger('finished_product_batch_id');
+                $table->decimal('quantity', 10, 2)->default(0);
+
+                $table->foreign('distribution_task_id')
+                    ->references('id')->on('distribution_tasks')
+                    ->onDelete('cascade');
+
+                $table->foreign('finished_product_batch_id')
+                    ->references('id')->on('finished_product_batches')
+                    ->onDelete('cascade');
+
+                $table->timestamps();
+            });
         });
     }
 

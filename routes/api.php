@@ -76,15 +76,42 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['role:admin|super_admin'])->patch('/tasks/raw-materials/notes/{noteId}/mark-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'markNoteRead']);
     Route::middleware(['role:admin|super_admin'])->delete('/tasks/raw-materials/{id}/notes/delete-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'deleteReadNotes']);
 });
+Route::middleware(['auth:sanctum'])->group(function () {
 
+    // إنشاء طلب إنتاج (Admin فقط)
+    Route::middleware('role:admin|super_admin')
+        ->post('/production-orders', [ProductionOrderController::class, 'create']);
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/production-orders', [ProductionOrderController::class, 'create']);
-    Route::get('/production-orders', [ProductionOrderController::class, 'listOrders']);
+    // عرض طلبات الإنتاج (موظف الإنتاج + الإدارة)
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production-orders', [ProductionOrderController::class, 'listOrders']);
+
+    // بدء الطلب
+    Route::middleware('role:production_employee')
+        ->post('/production-orders/{orderId}/start', [ProductionStageController::class, 'startOrder']);
+
+    // إيقاف الطلب
+    Route::middleware('role:production_employee')
+        ->post('/production-orders/{orderId}/pause', [ProductionStageController::class, 'pauseOrder']);
+
+    // استئناف الطلب
+    Route::middleware('role:production_employee')
+        ->post('/production-orders/{orderId}/resume', [ProductionStageController::class, 'resumeOrder']);
+
+    // إنهاء مرحلة
+    Route::middleware('role:production_employee')
+        ->post('/production-stages/{stageId}/complete', [ProductionStageController::class, 'completeStage']);
+
+    // إنشاء Batch للمنتج النهائي
+    Route::middleware('role:production_employee')
+        ->post('/finished-product-batches', [FinishedProductBatchController::class, 'create']);
+
+    // عرض Batches
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production-orders/{orderId}/batches', [FinishedProductBatchController::class, 'list1']);
+
 });
-Route::post('/production-orders/{orderId}/start', [ProductionStageController::class, 'startOrder']);
-Route::post('/production-stages/{stageId}/complete', [ProductionStageController::class, 'completeStage']);
-Route::post('/production-orders/{orderId}/pause', [ProductionStageController::class, 'pauseOrder']);
-Route::post('/production-orders/{orderId}/resume', [ProductionStageController::class, 'resumeOrder']);
-Route::post('/finished-product-batches', [FinishedProductBatchController::class, 'create']);
-Route::get('/production-orders/{orderId}/batches', [FinishedProductBatchController::class, 'list']);
+Route::middleware(['auth:sanctum'])->get(
+    '/production-orders/{orderId}/stages',
+    [ProductionOrderController::class, 'listOrders']
+);

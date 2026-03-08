@@ -8,7 +8,8 @@ class ProductionOrder extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'order_number','user_id','status','start_date','end_date'
+
+         'order_number','user_id','status','start_date','end_date'
     ];
 
     public function user()
