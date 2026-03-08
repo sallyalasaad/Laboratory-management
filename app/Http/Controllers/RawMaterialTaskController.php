@@ -222,8 +222,13 @@ class RawMaterialTaskController extends Controller
         $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'send_to_production')->firstOrFail();
 
         $details = $task->details ?? [];
+        // Use the items created by admin when the task was made
         $items = $details['items'] ?? [];
         $productionOrderId = $details['production_order_id'] ?? null;
+
+        if (empty($items)) {
+            return response()->json(['message' => 'No items defined for this send task'], 422);
+        }
 
         if (!$productionOrderId) {
             return response()->json(['message' => 'Missing production order id in task details'], 422);
@@ -231,24 +236,44 @@ class RawMaterialTaskController extends Controller
 
         $productionOrder = ProductionOrder::findOrFail($productionOrderId);
 
-        DB::transaction(function () use ($items, $productionOrder, $task) {
-            foreach ($items as $it) {
-                $rawMaterialId = $it['raw_material_id'];
-                $qty = $it['quantity'];
+        $createdAllocations = [];
 
-                $allocs = $this->inventory->allocateFifo($rawMaterialId, $qty);
+        try {
+            DB::transaction(function () use ($items, $productionOrder, $task, &$createdAllocations) {
+                foreach ($items as $it) {
+                    $rawMaterialId = $it['raw_material_id'];
+                    $qty = $it['quantity'];
 
-                foreach ($allocs as $alloc) {
-                    $productionOrder->rawMaterialBatches()->attach($alloc['batch_id'], ['quantity' => $alloc['quantity']]);
+                    $allocs = $this->inventory->allocateFifo($rawMaterialId, $qty);
+
+                    $allocatedQty = array_sum(array_map(function ($a) { return $a['quantity']; }, $allocs));
+                    if ($allocatedQty < $qty) {
+                        throw new \Exception("Insufficient inventory for raw material id {$rawMaterialId}: requested {$qty}, allocated {$allocatedQty}");
+                    }
+
+                    foreach ($allocs as $alloc) {
+                        $productionOrder->rawMaterialBatches()->attach($alloc['batch_id'], ['quantity' => $alloc['quantity']]);
+                        $createdAllocations[] = [
+                            'raw_material_id' => $rawMaterialId,
+                            'batch_id' => $alloc['batch_id'],
+                            'quantity' => $alloc['quantity']
+                        ];
+                    }
                 }
-            }
 
-            $task->status = 'completed';
-            $task->sent_at = now();
-            $task->save();
-        });
+                $task->status = 'completed';
+                $task->sent_at = now();
+                $details = $task->details ?? [];
+                $details['sent_allocations'] = $createdAllocations;
+                unset($details['items']);
+                $task->details = $details;
+                $task->save();
+            });
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
+        }
 
-        return response()->json(['message' => 'Materials sent to production']);
+        return response()->json(['message' => 'Materials sent to production', 'allocations' => $createdAllocations]);
     }
 
     // Warehouse adds a note to the task (sent to admin)
@@ -286,6 +311,12 @@ class RawMaterialTaskController extends Controller
             ->orderBy('created_at', 'desc')
             ->with(['fromUser'])
             ->get();
+
+        // Mark notes addressed to the current user as read
+        RawMaterialNote::where('raw_material_task_id', $id)
+            ->where('to_user_id', $user->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
 
         return response()->json(['notes' => $notes]);
     }
