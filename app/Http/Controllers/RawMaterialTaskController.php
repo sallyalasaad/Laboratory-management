@@ -10,6 +10,7 @@ use App\Services\RawMaterialInventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Models\User;
 use Spatie\Permission\Traits\HasRoles;
 
 
@@ -52,6 +53,20 @@ class RawMaterialTaskController extends Controller
             'items.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
             'items.*.quantity' => 'required|numeric|min:0.0001',
         ]);
+
+        // Check availability for each item before creating the task
+        foreach ($request->items as $item) {
+            $rawMaterialId = $item['raw_material_id'];
+            $requestedQuantity = $item['quantity'];
+
+            $availableQuantity = RawMaterialBatch::where('raw_material_id', $rawMaterialId)->sum('remaining_quantity');
+
+            if ($availableQuantity < $requestedQuantity) {
+                return response()->json([
+                    'message' => "Insufficient quantity for raw material ID {$rawMaterialId}. Available: {$availableQuantity}, Requested: {$requestedQuantity}"
+                ], 422);
+            }
+        }
 
         // Create a ProductionOrder record and generate an auto-incremented order number
         $productionOrder = ProductionOrder::create([
@@ -277,29 +292,35 @@ class RawMaterialTaskController extends Controller
     }
 
     // Warehouse adds a note to the task (sent to admin)
-    public function addNote(Request $request, $id)
-    {
-        $user = Auth::user();
+   public function addNote(Request $request)
+{
+    $user = Auth::user();
 
-        $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->firstOrFail();
+    $request->validate([
+        'message' => 'required|string'
+    ]);
 
-        $request->validate([
-            'message' => 'required|string'
-        ]);
+    // جلب الأدمن
+    $admin = User::role('admin')->first();
 
-        $note = RawMaterialNote::create([
-            'raw_material_task_id' => $task->id,
-            'from_user_id' => $user->id,
-            'to_user_id' => $task->admin_id,
-            'message' => $request->message,
-            'is_read' => false
-        ]);
-
-        return response()->json(['message' => 'Note added', 'note' => $note], 201);
+    if (!$admin) {
+        return response()->json(['message' => 'Admin not found'], 404);
     }
 
+    $note = RawMaterialNote::create([
+        'from_user_id' => $user->id,
+        'to_user_id' => $admin->id,
+        'message' => $request->message,
+        'is_read' => false
+    ]);
+
+    return response()->json([
+        'message' => 'Note sent to admin',
+        'note' => $note
+    ], 201);
+}
     // Admin lists notes for a task (shows read/unread)
-    public function adminListNotes(Request $request, $id)
+    public function adminListNotes()
     { /** @var \App\Models\User $user */
         $user = Auth::user();
 
@@ -307,18 +328,14 @@ class RawMaterialTaskController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $notes = RawMaterialNote::where('raw_material_task_id', $id)
-            ->orderBy('created_at', 'desc')
-            ->with(['fromUser'])
-            ->get();
+         $notes = RawMaterialNote::with(['fromUser'])
+        ->orderBy('is_read', 'asc')
+        ->orderBy('created_at', 'desc')
+        ->get();
 
-        // Mark notes addressed to the current user as read
-        RawMaterialNote::where('raw_material_task_id', $id)
-            ->where('to_user_id', $user->id)
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
-
-        return response()->json(['notes' => $notes]);
+    return response()->json([
+        'notes' => $notes
+    ]);
     }
 
     // Admin marks a single note as read

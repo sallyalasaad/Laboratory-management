@@ -71,8 +71,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/inventory/summary', [\App\Http\Controllers\RawMaterialTaskController::class, 'inventorySummary']);
 
     // Notes for raw material tasks
-    Route::post('/tasks/raw-materials/{id}/notes', [\App\Http\Controllers\RawMaterialTaskController::class, 'addNote']);
-    Route::middleware(['role:admin|super_admin'])->get('/tasks/raw-materials/{id}/notes', [\App\Http\Controllers\RawMaterialTaskController::class, 'adminListNotes']);
+    Route::post('/tasks/raw-materials/notes', [\App\Http\Controllers\RawMaterialTaskController::class, 'addNote']);
+    Route::middleware(['role:admin|super_admin'])->get('/task/raw-materials/notes', [\App\Http\Controllers\RawMaterialTaskController::class, 'adminListNotes']);
     Route::middleware(['role:admin|super_admin'])->patch('/tasks/raw-materials/notes/{noteId}/mark-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'markNoteRead']);
     Route::middleware(['role:admin|super_admin'])->delete('/tasks/raw-materials/{id}/notes/delete-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'deleteReadNotes']);
 });
