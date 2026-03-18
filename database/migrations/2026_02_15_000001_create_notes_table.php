@@ -26,5 +26,7 @@ return new class extends Migration
     public function down()
     {
         Schema::dropIfExists('raw_material_notes');
+
     }
+
 };
