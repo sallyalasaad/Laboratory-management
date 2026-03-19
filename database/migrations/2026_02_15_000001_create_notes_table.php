@@ -8,9 +8,15 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::create('raw_material_notes', function (Blueprint $table) {
+        Schema::create('notes', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('raw_material_task_id')->nullable();
+            $table->unsignedBigInteger('production_order_id')->nullable();
+            $table->foreign('production_order_id')
+                ->references('id')
+                ->on('production_orders')
+                ->onDelete('cascade');
+
             $table->unsignedBigInteger('from_user_id');
             $table->unsignedBigInteger('to_user_id')->nullable();
             $table->text('message');

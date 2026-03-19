@@ -20,8 +20,7 @@ class ProductionOrderObserver
         $nextId = $lastOrder ? $lastOrder->id + 1 : 1;
 
         // مثال: FP-001، FP-002
-        $order->order_number = 'FP-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
-    }
+        $order->order_number = str_pad($nextId, 3, '0', STR_PAD_LEFT);    }
 
 
     /**
