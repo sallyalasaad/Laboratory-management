@@ -8,8 +8,13 @@ class ProductionOrder extends Model
 {
     use HasFactory;
     protected $fillable = [
-
-         'order_number','user_id','status','start_date','end_date'
+        'order_number',
+        'user_id',
+        'finished_product_id',
+        'quantity',
+        'status',
+        'start_date',
+        'end_date'
     ];
 
     public function user()
@@ -33,5 +38,13 @@ class ProductionOrder extends Model
     public function finishedProductBatches()
     {
         return $this->hasMany(FinishedProductBatch::class);
+    }
+    public function product()
+    {
+        return $this->belongsTo(FinishedProduct::class,'finished_product_id');
+    }
+    public function notes()
+    {
+        return $this->hasMany(Note::class, 'production_order_id');
     }
 }

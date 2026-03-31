@@ -76,6 +76,32 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['role:admin|super_admin'])->patch('/tasks/raw-materials/notes/{noteId}/mark-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'markNoteRead']);
     Route::middleware(['role:admin|super_admin'])->delete('/tasks/raw-materials/{id}/notes/delete-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'deleteReadNotes']);
 });
+
+///notes for production
+Route::middleware(['auth:sanctum'])->group(function () {
+
+    Route::middleware('role:production_employee|admin|super_admin')
+->post('/production-notes', [ProductionOrderController::class, 'addProductionNote']);
+
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production-notes/{id}', [ProductionOrderController::class, 'getProductionNotes']);
+
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->patch('/notes/read/{id}', [ProductionOrderController::class, 'markAsRead']);
+
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production-notes-unread/{id}', [ProductionOrderController::class, 'getUnreadCount']);
+
+
+    Route::middleware('role:production_employee|admin|super_admin')->delete('/notes/{id}', [ProductionOrderController::class, 'deleteNote']);
+
+
+
+
+
+});
+
+
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // إنشاء طلب إنتاج (Admin فقط)
@@ -84,12 +110,26 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // عرض طلبات الإنتاج (موظف الإنتاج + الإدارة)
     Route::middleware('role:production_employee|admin|super_admin')
-        ->get('/production-orders', [ProductionOrderController::class, 'listOrders']);
+        ->get('/production-orders', [ProductionOrderController::class, 'currentTasks']);
+//عرض سجل الطلبات
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/ordersHistory', [ProductionOrderController::class, 'ordersHistory']);
+    //عرض كل الطلبات
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/allorders', [ProductionOrderController::class, 'allorders']);
+    ///عرص طلب معين
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/order/{id}', [ProductionOrderController::class, 'show']);
 
     // بدء الطلب
     Route::middleware('role:production_employee')
         ->post('/production-orders/{orderId}/start', [ProductionStageController::class, 'startOrder']);
-
+// قبول طلب الإنتاج
+    Route::middleware('role:production_employee')->post('/production-orders/{orderId}/accept',
+        [ProductionStageController::class,'acceptOrder']);
+    // رفض الطلب
+    Route::middleware('role:production_employee')->post('/production-orders/{orderId}/reject',
+        [ProductionStageController::class,'rejectOrder']);
     // إيقاف الطلب
     Route::middleware('role:production_employee')
         ->post('/production-orders/{orderId}/pause', [ProductionStageController::class, 'pauseOrder']);
@@ -109,7 +149,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // عرض Batches
     Route::middleware('role:production_employee|admin|super_admin')
         ->get('/production-orders/{orderId}/batches', [FinishedProductBatchController::class, 'list1']);
-
+    Route::middleware('role:production_employee')->get('/production/incoming', [ProductionOrderController::class, 'incomingTasks']);
 });
 Route::middleware(['auth:sanctum'])->get(
     '/production-orders/{orderId}/stages',

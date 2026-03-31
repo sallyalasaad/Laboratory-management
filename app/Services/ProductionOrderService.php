@@ -26,13 +26,12 @@ class ProductionOrderService
                 'note' => $note
             ]);
 
-            $stages = ['تحضير', 'طبخ', 'تعبئة', 'تبريد', 'إنهاء'];
-
+            $stages = ['تحضير', 'طبخ', 'تبريد', 'إرسال للمستودع'];
             foreach ($stages as $index => $stage) {
                 ProductionStage::create([
-                    'production_order_id' => $order->id,
-                    'stage_name' => $stage,
-                    'status' => $index === 0 ? 'active' : 'pending'
+                    'production_order_id'=>$order->id,
+                    'stage_name'=>$stage,
+                    'status'=>$index === 0 ? 'active' : 'pending'
                 ]);
             }
 
@@ -48,10 +47,76 @@ class ProductionOrderService
     {
         $order = $this->dao->findById($orderId);
         return $this->dao->updateStatus($order, $status);
-    }
-    public function listOrders()
-    {
-        return $this->dao->listAll(); // هذا داخلي داخل Service
-    }
+    }public function getCurrentTasks()
+{
+    $orders = $this->dao->getCurrentOrders();
 
+    return $orders->map(function ($order) {
+        return [
+            'task_number' => $order->order_number,
+            'status' => $order->status,
+            'product_name' => $order->product?->name,
+            'quantity' => $order->quantity,
+            'date' => $order->created_at->format('Y-m-d'),
+
+            'stages' => $order->stages->map(function ($stage) {
+                return [
+                    'stage_name' => $stage->stage_name,
+                    'status' => $stage->status
+                ];
+            }),
+
+            'notes' => $order->notes->map(function ($note) {
+                return [
+                    'message' => $note->message,
+                    'from' => $note->fromUser?->name,
+                    'is_read' => $note->is_read,
+                    'date' => $note->created_at->format('Y-m-d H:i')
+                ];
+            }),
+
+            'unread_notes' => $order->notes->where('is_read', false)->count()
+        ];
+    });
+}
+    public function getOrdersHistory()
+    {
+        $orders = $this->dao->getOrdersHistory();
+
+        return $orders->map(function ($order) {
+            return [
+                'task_number' => $order->order_number,
+                'product_name' => $order->product->name,
+                'quantity' => $order->quantity,
+                'status' => $order->status,
+                'date' => $order->created_at->format('Y-m-d'),
+                'notes_count' => $order->notes->count()
+            ];
+        });
+    }
+    public function getIncomingTasks()
+    {
+        $orders = $this->dao->getIncomingOrders();
+
+        return $orders->map(function ($order) {
+            return [
+                'task_number' => $order->order_number,
+                'product_name' => $order->product->name,
+                'quantity' => $order->quantity,
+                'date' => $order->created_at->format('Y-m-d'),
+                'status' => $order->status
+            ];
+        });
+    }
+    public function getAllOrders()
+    {
+        return $this->dao->listAll();
+    }
+    public function getSingleOrder($id)
+    {
+        $order = $this->dao->findById($id)
+            ->load(['product','stages','notes.fromUser']);
+
+        return $order;
+    }
 }

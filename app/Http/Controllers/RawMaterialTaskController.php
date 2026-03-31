@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Note;
 use App\Models\RawMaterialTask;
 use App\Models\RawMaterialBatch;
-use App\Models\RawMaterialNote;
 use App\Models\ProductionOrder;
 use App\Services\RawMaterialInventoryService;
 use Illuminate\Http\Request;
@@ -114,7 +114,7 @@ class RawMaterialTaskController extends Controller
         $tasks = RawMaterialTask::with(['user', 'admin'])->orderBy('created_at', 'desc')->get();
 
         $payload = $tasks->map(function ($t) {
-            $notes = RawMaterialNote::where('raw_material_task_id', $t->id)->orderBy('created_at', 'desc')->get();
+            $notes = Note::where('raw_material_task_id', $t->id)->orderBy('created_at', 'desc')->get();
 
             $details = $t->details ?? [];
             $pending = $details['pending_received_items'] ?? null;
@@ -314,7 +314,7 @@ class RawMaterialTaskController extends Controller
         return response()->json(['message' => 'Admin not found'], 404);
     }
 
-    $note = RawMaterialNote::create([
+    $note = Note::create([
         'from_user_id' => $user->id,
         'to_user_id' => $admin->id,
         'message' => $request->message,
@@ -335,7 +335,7 @@ class RawMaterialTaskController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-         $notes = RawMaterialNote::with(['fromUser'])
+         $notes = Note::with(['fromUser'])
         ->orderBy('is_read', 'asc')
         ->orderBy('created_at', 'desc')
         ->get();
@@ -354,7 +354,7 @@ class RawMaterialTaskController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $note = RawMaterialNote::where('id', $noteId)->where('to_user_id', $user->id)->firstOrFail();
+        $note = Note::where('id', $noteId)->where('to_user_id', $user->id)->firstOrFail();
         $note->is_read = true;
         $note->save();
 
@@ -370,7 +370,7 @@ class RawMaterialTaskController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $deleted = RawMaterialNote::where('raw_material_task_id', $id)
+        $deleted = Note::where('raw_material_task_id', $id)
             ->where('to_user_id', $user->id)
             ->where('is_read', true)
             ->delete();

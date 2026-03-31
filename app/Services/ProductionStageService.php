@@ -67,4 +67,9 @@ class ProductionStageService
         $order = $this->orderDao->findById($orderId);
         return $this->orderDao->updateStatus($order, 'in_progress');
     }
+    public function rejectOrder($orderId)
+    {
+        $order = $this->orderDao->findById($orderId);
+        return $this->orderDao->updateStatus($order,'rejected');
+    }
 }
