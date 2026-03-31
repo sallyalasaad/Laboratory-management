@@ -29,7 +29,7 @@ class RawMaterialTaskController extends Controller
 
         $request->validate([
             'user_id' => 'required|integer|exists:users,id',
-            'scheduled_at' => 'nullable|date'
+            'scheduled_at' => 'nullable|date|after_or_equal:now|before_or_equal:' . now()->addDays(30)
         ]);
 
         $task = RawMaterialTask::create([
@@ -189,7 +189,10 @@ class RawMaterialTaskController extends Controller
         $user = Auth::user();
 
         $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'receive')->firstOrFail();
-
+          if ($task->status === 'completed') {
+    return response()->json([
+        'message' => 'Task already completed'
+    ], 400);}
         $details = $task->details ?? [];
         $items = $details['pending_received_items'] ?? $request->items ?? [];
 
@@ -235,7 +238,11 @@ class RawMaterialTaskController extends Controller
         $user = Auth::user();
 
         $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'send_to_production')->firstOrFail();
-
+        if ($task->status === 'completed') {
+    return response()->json([
+        'message' => 'Task already completed'
+    ], 400);
+}
         $details = $task->details ?? [];
         // Use the items created by admin when the task was made
         $items = $details['items'] ?? [];
@@ -277,7 +284,7 @@ class RawMaterialTaskController extends Controller
                 }
 
                 $task->status = 'completed';
-                $task->sent_at = now();
+                $task->completed_at = now();
                 $details = $task->details ?? [];
                 $details['sent_allocations'] = $createdAllocations;
                 unset($details['items']);
