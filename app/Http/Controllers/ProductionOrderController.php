@@ -3,6 +3,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Note;
 use App\Models\ProductionOrder;
+use App\Models\RawMaterialBatch;
+use App\Models\RawMaterialTask;
+use App\Models\User;
 use Illuminate\Http\Request;
 use App\Services\ProductionOrderService;
 use Illuminate\Support\Facades\Auth;
@@ -79,6 +82,55 @@ class ProductionOrderController extends Controller
         ]);
     }
 
+    ////🙂
+    public function addGeneralNote(Request $request)
+    {
+        $request->validate([
+            'message' => 'required|string'
+        ]);
+
+        $user = auth()->user();
+
+        // جلب الأدمن
+        $admin = User::role('admin')->first();
+
+        if (!$admin) {
+            return response()->json(['message' => 'Admin not found'], 404);
+        }
+
+        // إنشاء الملاحظة بدون ربط بـ production_order_id
+        $note = Note::create([
+            'production_order_id' => null,
+            'from_user_id' => $user->id,
+            'to_user_id' => $admin->id,
+            'message' => $request->message,
+            'is_read' => false
+        ]);
+
+        return response()->json([
+            'message' => 'تمت إضافة الملاحظة العامة بنجاح',
+            'note' => $note
+        ]);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // 🟢 6. عرض ملاحظات طلب
     public function getProductionNotes($orderId)
     {
@@ -135,4 +187,54 @@ class ProductionOrderController extends Controller
     {
         return response()->json($this->service->getSingleOrder($id));
     }
+
+    ////
+    public function confirmReceipt(Request $request, $taskId)
+    {
+        $user = Auth::user();
+
+        $task = RawMaterialTask::where('id', $taskId)
+            ->where('user_id', $user->id)
+            ->where('route', 'receive')
+            ->firstOrFail();
+
+        $items = $request->input('items'); // مصفوفة من المواد مع الكمية والوحدة
+
+        if (empty($items)) {
+            return response()->json(['message' => 'يرجى إدخال المواد المراد استلامها'], 422);
+        }
+
+        $receivedBatches = [];
+
+        DB::transaction(function() use ($items, $task, &$receivedBatches) {
+            foreach ($items as $item) {
+                $batch = RawMaterialBatch::create([
+                    'raw_material_name' => $item['name'], // مثال: حليب بقري
+                    'unit' => $item['unit'], // مثال: لتر
+                    'quantity' => $item['quantity'],
+                    'remaining_quantity' => $item['quantity'],
+                    'received_at' => now(),
+                ]);
+
+                $receivedBatches[] = $batch->toArray();
+            }
+
+            $task->status = 'received';
+            $task->received_at = now();
+            $task->details['received_batches'] = $receivedBatches;
+            $task->save();
+        });
+
+        return response()->json([
+            'message' => 'تم تأكيد استلام المواد بنجاح',
+            'received_batches' => $receivedBatches
+        ]);
+    }
+
+
+
+
+
+
+
 }

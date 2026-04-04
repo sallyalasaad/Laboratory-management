@@ -395,4 +395,73 @@ class RawMaterialTaskController extends Controller
 
         return response()->json(['inventory' => $summary]);
     }
+
+    public function confirmReceiveinp(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        // جلب المهمة والتأكد أنها تخص المستخدم وهي من نوع استلام
+        $task = RawMaterialTask::where('id', $id)
+            ->where('user_id', $user->id)
+            ->where('route', 'receive')
+            ->firstOrFail();
+
+        // جلب المواد المدخلة مسبقاً
+        $details = $task->details ?? [];
+        $items = $details['pending_received_items'] ?? $request->items ?? [];
+
+        // التحقق من وجود مواد
+        if (empty($items)) {
+            return response()->json([
+                'message' => 'No items to confirm',
+                'details' => $details
+            ], 422);
+        }
+
+        $created = [];
+
+        DB::transaction(function () use ($items, $task, &$created, &$details) {
+
+            foreach ($items as $it) {
+
+                // إنشاء Batch لكل مادة
+                $batch = RawMaterialBatch::create([
+                    'raw_material_id' => $it['raw_material_id'],
+                    'batch_number' => $it['batch_number'] ?? null,
+                    'quantity' => $it['quantity'],
+                    'remaining_quantity' => $it['quantity'],
+                    'expiry_date' => $it['expiry_date'] ?? null,
+                    'received_at' => now()
+                ]);
+
+                // توليد batch_number إذا غير موجود
+                if (empty($batch->batch_number)) {
+                    $batch->batch_number = 'RB-' . date('Ymd') . '-' . str_pad($batch->id, 6, '0', STR_PAD_LEFT);
+                    $batch->save();
+                }
+
+                $created[] = $batch->toArray();
+            }
+
+            // تحديث حالة المهمة
+            $task->status = 'completed';
+            $task->sent_at = now();
+
+            // تخزين المواد المستلمة
+            $details['received_items'] = $created;
+            unset($details['pending_received_items']);
+
+            $task->details = $details;
+            $task->save();
+        });
+
+        return response()->json([
+            'message' => 'Receipt confirmed',
+            'received_batches' => $created
+        ]);
+    }
+
+
+
+
 }

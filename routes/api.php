@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\FinishedProductBatchController;
 use App\Http\Controllers\ProductionStageController;
+use App\Http\Controllers\RawMaterialTaskController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
@@ -82,6 +83,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::middleware('role:production_employee|admin|super_admin')
 ->post('/production-notes', [ProductionOrderController::class, 'addProductionNote']);
+    Route::middleware('role:production_employee')
+        ->post('/production/notes/general', [ProductionOrderController::class, 'addGeneralNote']);
 
     Route::middleware('role:production_employee|admin|super_admin')
         ->get('/production-notes/{id}', [ProductionOrderController::class, 'getProductionNotes']);
@@ -151,7 +154,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
         ->get('/production-orders/{orderId}/batches', [FinishedProductBatchController::class, 'list1']);
     Route::middleware('role:production_employee')->get('/production/incoming', [ProductionOrderController::class, 'incomingTasks']);
 });
+// عرض طلبات الإنتاج stages
 Route::middleware(['auth:sanctum'])->get(
     '/production-orders/{orderId}/stages',
     [ProductionOrderController::class, 'listOrders']
 );
+
+// عرض مهام الإنتاج
+/*Route::middleware('role:production_employee|admin|super_admin')
+    ->get('/production/tasks', [RawMaterialTaskController::class, 'productionTasks']);*/
+
+// تأكيد الاستلام من قبل الإنتاج
+Route::middleware('role:production_employee|admin|super_admin')
+    ->post('/production/tasks/{id}/confirm-receive',
+        [RawMaterialTaskController::class, 'confirmReceiveinp']
+    );
