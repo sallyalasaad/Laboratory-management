@@ -47,7 +47,8 @@ class ProductionOrderService
     {
         $order = $this->dao->findById($orderId);
         return $this->dao->updateStatus($order, $status);
-    }public function getCurrentTasks()
+    }
+    public function getCurrentTasks()
 {
     $orders = $this->dao->getCurrentOrders();
 
@@ -101,7 +102,7 @@ class ProductionOrderService
         return $orders->map(function ($order) {
             return [
                 'task_number' => $order->order_number,
-                'product_name' => $order->product->name,
+                'product_name' => $order->product?->name,
                 'quantity' => $order->quantity,
                 'date' => $order->created_at->format('Y-m-d'),
                 'status' => $order->status

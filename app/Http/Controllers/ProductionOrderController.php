@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use App\Services\ProductionOrderService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ProductionOrderController extends Controller
 {
@@ -22,6 +23,7 @@ class ProductionOrderController extends Controller
     public function create(Request $request)
     {
         $request->validate([
+         
             'user_id' => 'required|integer|exists:users,id',
             'finished_product_id' => 'required|integer|exists:finished_products,id',
             'quantity' => 'required|numeric|min:0.01',
