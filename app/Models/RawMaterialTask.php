@@ -17,7 +17,7 @@ class RawMaterialTask extends Model
 
     protected $casts = [
         'details' => 'array',
-        'scheduled_at' => 'datetime',
+        'scheduled_at' => 'datetime:Y-m-d H:i:s',
         'sent_at' => 'datetime'
     ];
 

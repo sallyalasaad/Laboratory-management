@@ -11,6 +11,10 @@ class RawMaterialBatch extends Model
     protected $fillable = [
         'raw_material_id','batch_number','quantity','expiry_date','received_at','remaining_quantity'
     ];
+       protected $casts = [
+        'received_at' => 'datetime:Y-m-d H:i:s',
+        //'expiry_date' => 'date:Y-m-d'
+        ];
 
     public function rawMaterial()
     {
