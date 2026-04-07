@@ -69,16 +69,16 @@ class RawMaterialTaskController extends Controller
         }
 
         // Create a ProductionOrder record and generate an auto-incremented order number
-        $productionOrder = ProductionOrder::create([
-            'order_number' => 'temp',
-            'user_id' => $request->user_id,
-               'finished_product_id' => $request->finished_product_id,
-                   'quantity' => $request->quantity,
-            'status' => 'pending'
-        ]);
+        // $productionOrder = ProductionOrder::create([
+        //     'order_number' => 'temp',
+        //     'user_id' => $request->user_id,
+        //        'finished_product_id' => $request->finished_product_id,
+        //            'quantity' => $request->quantity,
+        //     'status' => 'pending'
+        // ]);
 
-        $productionOrder->order_number = 'PO-'.str_pad($productionOrder->id, 6, '0', STR_PAD_LEFT);
-        $productionOrder->save();
+        // $productionOrder->order_number = 'PO-'.str_pad($productionOrder->id, 6, '0', STR_PAD_LEFT);
+        // $productionOrder->save();
 
         $task = RawMaterialTask::create([
             'admin_id' => Auth::id(),
@@ -86,12 +86,12 @@ class RawMaterialTaskController extends Controller
             'route' => 'send_to_production',
             'status' => 'pending',
             'details' => [
-                'production_order_id' => $productionOrder->id,
+               //'production_order_id' => $productionOrder->id,
                 'items' => $request->items
             ]
         ]);
 
-        return response()->json(['message' => 'Send task created', 'task' => $task, 'production_order' => $productionOrder], 201);
+        return response()->json(['message' => 'Send task created', 'task' => $task], 201);
     }
 
     // Warehouse keeper lists their tasks
