@@ -50,6 +50,7 @@ class RawMaterialTaskController extends Controller
         $request->validate([
             'user_id' => 'required|integer|exists:users,id',
             'items' => 'required|array',
+            'finished_product_id' => 'required|exists:finished_products,id',
             'items.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
             'items.*.quantity' => 'required|numeric|min:0.0001',
         ]);
@@ -72,6 +73,8 @@ class RawMaterialTaskController extends Controller
         $productionOrder = ProductionOrder::create([
             'order_number' => 'temp',
             'user_id' => $request->user_id,
+            'finished_product_id' => $request->finished_product_id,
+            'quantity' => $request->quantity, // ✅ هذا المهم
             'status' => 'pending'
         ]);
 
@@ -403,68 +406,38 @@ class RawMaterialTaskController extends Controller
         return response()->json(['inventory' => $summary]);
     }
 
-    public function confirmReceiveinp(Request $request, $id)
+    public function confirmReceiveFromProduction($id)
     {
         $user = Auth::user();
 
-        // جلب المهمة والتأكد أنها تخص المستخدم وهي من نوع استلام
         $task = RawMaterialTask::where('id', $id)
             ->where('user_id', $user->id)
-            ->where('route', 'receive')
+            ->where('route', 'send_to_production')
             ->firstOrFail();
 
-        // جلب المواد المدخلة مسبقاً
-        $details = $task->details ?? [];
-        $items = $details['pending_received_items'] ?? $request->items ?? [];
-
-        // التحقق من وجود مواد
-        if (empty($items)) {
+        if ($task->status !== 'completed') {
             return response()->json([
-                'message' => 'No items to confirm',
-                'details' => $details
-            ], 422);
+                'message' => 'Task not ready for receiving'
+            ], 400);
         }
 
-        $created = [];
+        // تحديث الحالة
+        $task->status = 'received_by_production';
+        $task->received_at = now();
+        $task->save();
 
-        DB::transaction(function () use ($items, $task, &$created, &$details) {
+        // 🔥 تحديث حالة طلب الإنتاج
+        $productionOrderId = $task->details['production_order_id'] ?? null;
 
-            foreach ($items as $it) {
-
-                // إنشاء Batch لكل مادة
-                $batch = RawMaterialBatch::create([
-                    'raw_material_id' => $it['raw_material_id'],
-                    'batch_number' => $it['batch_number'] ?? null,
-                    'quantity' => $it['quantity'],
-                    'remaining_quantity' => $it['quantity'],
-                    'expiry_date' => $it['expiry_date'] ?? null,
-                    'received_at' => now()
-                ]);
-
-                // توليد batch_number إذا غير موجود
-                if (empty($batch->batch_number)) {
-                    $batch->batch_number = 'RB-' . date('Ymd') . '-' . str_pad($batch->id, 6, '0', STR_PAD_LEFT);
-                    $batch->save();
-                }
-
-                $created[] = $batch->toArray();
-            }
-
-            // تحديث حالة المهمة
-            $task->status = 'completed';
-            $task->sent_at = now();
-
-            // تخزين المواد المستلمة
-            $details['received_items'] = $created;
-            unset($details['pending_received_items']);
-
-            $task->details = $details;
-            $task->save();
-        });
+        if ($productionOrderId) {
+            $order = ProductionOrder::find($productionOrderId);
+            $order->status = 'materials_received';
+            $order->save();
+        }
 
         return response()->json([
-            'message' => 'Receipt confirmed',
-            'received_batches' => $created
+            'message' => 'Materials received by production',
+            'task' => $task
         ]);
     }
 
