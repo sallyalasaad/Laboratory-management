@@ -50,6 +50,7 @@ class RawMaterialTaskController extends Controller
         $request->validate([
             'user_id' => 'required|integer|exists:users,id',
             'items' => 'required|array',
+            'finished_product_id' => 'required|exists:finished_products,id',
             'items.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
             'items.*.quantity' => 'required|numeric|min:0.0001',
         ]);
@@ -405,29 +406,35 @@ class RawMaterialTaskController extends Controller
         return response()->json(['inventory' => $summary]);
     }
 
-    // Production employee confirms receipt of materials sent from warehouse
+
     public function confirmReceiveinp(Request $request, $id)
     {
-        /** @var \App\Models\User $user */
+        /** @var AppModelsUser $user */
         $user = Auth::user();
 
+        // البحث عن المهمة المرتبطة بالمستخدم والموجهة للإنتاج
         $task = RawMaterialTask::where('id', $id)
+            ->where('user_id', $user->id) // لضمان أن المهمة تخص المستخدم
             ->where('route', 'send_to_production')
             ->firstOrFail();
 
+        // التحقق من حالة المهمة إذا كانت جاهزة للاستلام
         if ($task->status !== 'completed') {
             return response()->json([
-                'message' => 'Materials have not been sent from warehouse yet'
-            ], 422);
+                'message' => 'Task not ready for receiving'
+            ], 400);
         }
 
         $details = $task->details ?? [];
+
+        // التحقق إن كانت المواد قد استلمت مسبقاً
         if (!empty($details['production_received_at'])) {
             return response()->json([
                 'message' => 'Materials already confirmed as received'
             ], 400);
         }
 
+        // التأكد من وجود معرف طلب الإنتاج
         $productionOrderId = $details['production_order_id'] ?? null;
         if (!$productionOrderId) {
             return response()->json([
@@ -437,12 +444,19 @@ class RawMaterialTaskController extends Controller
 
         $productionOrder = ProductionOrder::findOrFail($productionOrderId);
 
+        // بدء معاملة قاعدة بيانات لضمان سلامة العمليات
         DB::transaction(function () use ($task, $productionOrder, $user, &$details) {
+            // تحديث تفاصيل المهمة بتاريخ وموظف الاستلام
             $details['production_received_at'] = now();
             $details['production_received_by'] = $user->id;
             $task->details = $details;
+
+            // تحديث حالة المهمة
+            $task->status = 'received_by_production';
+            $task->received_at = now();
             $task->save();
 
+            // تأكد من تحديث حالة طلب الإنتاج
             if ($productionOrder->status !== 'materials_received') {
                 $productionOrder->status = 'materials_received';
                 $productionOrder->save();
@@ -455,6 +469,5 @@ class RawMaterialTaskController extends Controller
             'production_order' => $productionOrder
         ]);
     }
-
 
 }
