@@ -390,67 +390,46 @@ class RawMaterialTaskController extends Controller
     }
 
 
-    public function confirmReceiveinp(Request $request, $id)
-    {
-        /** @var AppModelsUser $user */
-        $user = Auth::user();
+   public function confirmReceiveinp(Request $request, $id)
+{
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
 
-        // البحث عن المهمة المرتبطة بالمستخدم والموجهة للإنتاج
-        $task = RawMaterialTask::where('id', $id)
-            ->where('user_id', $user->id) // لضمان أن المهمة تخص المستخدم
-            ->where('route', 'send_to_production')
-            ->firstOrFail();
+    // البحث عن مهمة إرسال المواد إلى الإنتاج
+    $task = RawMaterialTask::where('id', $id)
+        ->where('route', 'send_to_production')
+        ->firstOrFail();
 
-        // التحقق من حالة المهمة إذا كانت جاهزة للاستلام
-        if ($task->status !== 'completed') {
-            return response()->json([
-                'message' => 'Task not ready for receiving'
-            ], 400);
-        }
-
-        $details = $task->details ?? [];
-
-        // التحقق إن كانت المواد قد استلمت مسبقاً
-        if (!empty($details['production_received_at'])) {
-            return response()->json([
-                'message' => 'Materials already confirmed as received'
-            ], 400);
-        }
-
-        // التأكد من وجود معرف طلب الإنتاج
-        $productionOrderId = $details['production_order_id'] ?? null;
-        if (!$productionOrderId) {
-            return response()->json([
-                'message' => 'Missing production order id in task details'
-            ], 422);
-        }
-
-        $productionOrder = ProductionOrder::findOrFail($productionOrderId);
-
-        // بدء معاملة قاعدة بيانات لضمان سلامة العمليات
-        DB::transaction(function () use ($task, $productionOrder, $user, &$details) {
-            // تحديث تفاصيل المهمة بتاريخ وموظف الاستلام
-            $details['production_received_at'] = now();
-            $details['production_received_by'] = $user->id;
-            $task->details = $details;
-
-            // تحديث حالة المهمة
-            $task->status = 'received_by_production';
-            $task->received_at = now();
-            $task->save();
-
-            // تأكد من تحديث حالة طلب الإنتاج
-            if ($productionOrder->status !== 'materials_received') {
-                $productionOrder->status = 'materials_received';
-                $productionOrder->save();
-            }
-        });
-
+    // التحقق من حالة المهمة: يجب أن يكون أمين المستودع أكمل الإرسال أو تم التأكيد مسبقاً
+    $details = $task->details ?? [];
+    if (($task->status !== 'completed' && $task->status !== 'received_by_production') || empty($details['sent_allocations'])) {
         return response()->json([
-            'message' => 'تم تأكيد استلام المواد الاولية',
-            'task' => $task,
-            'production_order' => $productionOrder
-        ]);
+            'message' => 'Task not ready for production receiving. Warehouse must complete sending first.'
+        ], 400);
     }
 
+    // التأكد إن المواد لم تُستلم مسبقاً
+    if (!empty($details['production_received_at'])) {
+        return response()->json([
+            'message' => 'Materials already confirmed as received by production'
+        ], 400);
+    }
+
+    // تحديث المهمة داخل معاملة قاعدة بيانات لضمان atomicity
+    DB::transaction(function () use ($task, $user, &$details) {
+        // تحديث تفاصيل المهمة بتاريخ وموظف الاستلام
+        $details['production_received_at'] = now();
+        $details['production_received_by'] = $user->id;
+        $task->details = $details;
+
+        // تحديث حالة المهمة
+        $task->status = 'received_by_production';
+        $task->save();
+    });
+
+    return response()->json([
+        'message' => 'تم تأكيد استلام المواد من قبل الإنتاج',
+        'task' => $task
+    ]);
+}
 }
