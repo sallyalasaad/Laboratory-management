@@ -50,7 +50,7 @@ class RawMaterialTaskController extends Controller
         $request->validate([
             'user_id' => 'required|integer|exists:users,id',
             'items' => 'required|array',
-            'finished_product_id' => 'required|exists:finished_products,id',
+            //'finished_product_id' => 'required|exists:finished_products,id',
             'items.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
             'items.*.quantity' => 'required|numeric|min:0.0001',
         ]);
@@ -68,18 +68,6 @@ class RawMaterialTaskController extends Controller
                 ], 422);
             }
         }
-
-        // Create a ProductionOrder record and generate an auto-incremented order number
-        // $productionOrder = ProductionOrder::create([
-        //     'order_number' => 'temp',
-        //     'user_id' => $request->user_id,
-        //        'finished_product_id' => $request->finished_product_id,
-        //            'quantity' => $request->quantity,
-        //     'status' => 'pending'
-        // ]);
-
-        // $productionOrder->order_number = 'PO-'.str_pad($productionOrder->id, 6, '0', STR_PAD_LEFT);
-        // $productionOrder->save();
 
         $task = RawMaterialTask::create([
             'admin_id' => Auth::id(),
@@ -237,70 +225,65 @@ class RawMaterialTaskController extends Controller
 
     // Warehouse confirms sending to production: allocate FIFO and attach to production order
     public function confirmSend(Request $request, $id)
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
 
-        $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'send_to_production')->firstOrFail();
-        if ($task->status === 'completed') {
-    return response()->json([
-        'message' => 'Task already completed'
-    ], 400);
-}
-        $details = $task->details ?? [];
-        // Use the items created by admin when the task was made
-        $items = $details['items'] ?? [];
-        $productionOrderId = $details['production_order_id'] ?? null;
+    $task = RawMaterialTask::where('id', $id)
+        ->where('user_id', $user->id)
+        ->where('route', 'send_to_production')
+        ->firstOrFail();
 
-        if (empty($items)) {
-            return response()->json(['message' => 'No items defined for this send task'], 422);
-        }
+    if ($task->status === 'completed') {
+        return response()->json(['message' => 'Task already completed'], 400);
+    }
 
-        if (!$productionOrderId) {
-            return response()->json(['message' => 'Missing production order id in task details'], 422);
-        }
+    $items = $task->details['items'] ?? [];
 
-        $productionOrder = ProductionOrder::findOrFail($productionOrderId);
+    if (empty($items)) {
+        return response()->json(['message' => 'No items defined for this send task'], 422);
+    }
 
-        $createdAllocations = [];
+    $createdAllocations = [];
 
-        try {
-            DB::transaction(function () use ($items, $productionOrder, $task, &$createdAllocations) {
-                foreach ($items as $it) {
-                    $rawMaterialId = $it['raw_material_id'];
-                    $qty = $it['quantity'];
+    try {
+        DB::transaction(function () use ($items, $task, &$createdAllocations) {
+            foreach ($items as $it) {
+                $rawMaterialId = $it['raw_material_id'];
+                $qty = $it['quantity'];
 
-                    $allocs = $this->inventory->allocateFifo($rawMaterialId, $qty);
+                $allocs = $this->inventory->allocateFifo($rawMaterialId, $qty);
 
-                    $allocatedQty = array_sum(array_map(function ($a) { return $a['quantity']; }, $allocs));
-                    if ($allocatedQty < $qty) {
-                        throw new \Exception("Insufficient inventory for raw material id {$rawMaterialId}: requested {$qty}, allocated {$allocatedQty}");
-                    }
-
-                    foreach ($allocs as $alloc) {
-                        $productionOrder->rawMaterialBatches()->attach($alloc['batch_id'], ['quantity' => $alloc['quantity']]);
-                        $createdAllocations[] = [
-                            'raw_material_id' => $rawMaterialId,
-                            'batch_id' => $alloc['batch_id'],
-                            'quantity' => $alloc['quantity']
-                        ];
-                    }
+                $allocatedQty = array_sum(array_map(fn($a) => $a['quantity'], $allocs));
+                if ($allocatedQty < $qty) {
+                    throw new \Exception("Insufficient inventory for raw material id {$rawMaterialId}: requested {$qty}, allocated {$allocatedQty}");
                 }
 
-                $task->status = 'completed';
+                foreach ($allocs as $alloc) {
+                    // تخزين التخصيص مباشرة ضمن المهمة، بدون أمر إنتاج
+                    $createdAllocations[] = [
+                        'raw_material_id' => $rawMaterialId,
+                        'batch_id' => $alloc['batch_id'],
+                        'quantity' => $alloc['quantity']
+                    ];
+                }
+            }
+       $task->status = 'completed';
                 $task->sent_at = now();
                 $details = $task->details ?? [];
                 $details['sent_allocations'] = $createdAllocations;
                 unset($details['items']);
                 $task->details = $details;
                 $task->save();
-            });
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
-        }
-
-        return response()->json(['message' => 'Materials sent to production', 'allocations' => $createdAllocations]);
+        });
+    } catch (\Exception $e) {
+        return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
     }
 
+    return response()->json([
+        'message' => 'Materials sent successfully',
+        'allocations' => $createdAllocations
+    ]);
+}
     // Warehouse adds a note to the task (sent to admin)
    public function addNote(Request $request)
 {

@@ -167,5 +167,5 @@ Route::middleware(['auth:sanctum'])->get(
 // تأكيد الاستلام من قبل الإنتاج
 Route::middleware('role:production_employee|admin|super_admin')
     ->post('/production/tasks/{id}/confirm-receive',
-        [RawMaterialTaskController::class, 'confirmReceiveFromProduction']
+        [RawMaterialTaskController::class, 'confirmReceiveinp']
     );
