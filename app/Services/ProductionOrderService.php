@@ -22,20 +22,27 @@ class ProductionOrderService
                 'user_id' => $userId,
                 'finished_product_id' => $finishedProductId,
                 'quantity' => $quantity,
-                'status' => 'pending',
+                'status' => 'pending', // الطلب يبدأ كـ "معلق"
                 'note' => $note
             ]);
 
             $stages = ['تحضير', 'طبخ', 'تبريد', 'إرسال للمستودع'];
-            foreach ($stages as $index => $stage) {
+            foreach ($stages as $stage) {
                 ProductionStage::create([
-                    'production_order_id'=>$order->id,
-                    'stage_name'=>$stage,
-                    'status'=>$index === 0 ? 'active' : 'pending'
+                    'production_order_id' => $order->id,
+                    'stage_name' => $stage,
+                    'status' => 'pending' // جميع المراحل مبدئيًا معلقة
                 ]);
             }
 
-            return $order;
+            $order->load('product');
+
+            return [
+                'order' => $order,
+                'product_name' => $order->product?->name,
+                'product_size' => $order->product?->size,
+                'product_unit' => $order->product?->unit
+            ];
         });
     }
     public function getOrderWithStages($orderId)
@@ -56,7 +63,9 @@ class ProductionOrderService
         return [
             'task_number' => $order->order_number,
             'status' => $order->status,
-            'product_name' => $order->product?->name,
+            'product_name' => $order->product->name,
+            'product_size' => $order->product->size, // جديد
+            'product_unit' => $order->product->unit, // جديد
             'quantity' => $order->quantity,
             'date' => $order->created_at->format('Y-m-d'),
 
@@ -88,6 +97,8 @@ class ProductionOrderService
             return [
                 'task_number' => $order->order_number,
                 'product_name' => $order->product->name,
+                'product_size' => $order->product->size,  // أضف هذا
+                'product_unit' => $order->product->unit,  // أضف هذا
                 'quantity' => $order->quantity,
                 'status' => $order->status,
                 'date' => $order->created_at->format('Y-m-d'),
@@ -102,7 +113,9 @@ class ProductionOrderService
         return $orders->map(function ($order) {
             return [
                 'task_number' => $order->order_number,
-                'product_name' => $order->product?->name,
+                'product_name' => $order->product->name,
+                'product_size' => $order->product->size,  // أضف هذا
+                'product_unit' => $order->product->unit,  // أضف هذا
                 'quantity' => $order->quantity,
                 'date' => $order->created_at->format('Y-m-d'),
                 'status' => $order->status
@@ -117,7 +130,11 @@ class ProductionOrderService
     {
         $order = $this->dao->findById($id)
             ->load(['product','stages','notes.fromUser']);
-
-        return $order;
+        return [
+            'order' => $order,
+            'product_name' => $order->product?->name,
+            'product_size' => $order->product?->size,  // جديد
+            'product_unit' => $order->product?->unit   // جديد
+        ];
     }
 }

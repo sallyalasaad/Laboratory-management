@@ -71,12 +71,13 @@ class ProductionStageController extends Controller
     */
     public function startOrder($orderId)
     {
-        $order = $this->stageService->startOrder($orderId);
+        $result = $this->stageService->startOrder($orderId);
 
-        return response()->json([
-            'message' => 'تم بدء الإنتاج',
-            'order' => $order
-        ]);
+        if ($result['error']) {
+            return response()->json($result, $result['status_code']);
+        }
+
+        return response()->json($result, 200);
     }
 
     /*

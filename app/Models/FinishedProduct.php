@@ -9,7 +9,7 @@ class FinishedProduct extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name','unit','description'];
+    protected $fillable = ['name','size','unit','description'];
 
     public function batches()
     {

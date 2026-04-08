@@ -35,8 +35,9 @@ class ProductionOrderDAO
     }
     public function getCurrentOrders()
     {
-        return ProductionOrder::with(['stages', 'product', 'notes.fromUser'])
-            ->whereIn('status', ['pending','accepted','materials_received','in_progress','paused'])
+        return ProductionOrder::with(['product', 'stages', 'notes'])
+            ->whereIn('status', ['pending','accepted','materials_received','in_progress','paused']) // exclude rejected/completed
+            ->orderBy('created_at', 'desc')
             ->get();
     }
 
@@ -48,14 +49,13 @@ class ProductionOrderDAO
             ])
             ->orderBy('created_at','desc')
             ->get();
-    }
-    public function getIncomingOrders()
-    {
-        return ProductionOrder::with(['product'])
-            ->where('status', 'pending')
-            ->orderBy('created_at','desc')
-            ->get();
-    }
+    }public function getIncomingOrders()
+{
+    return ProductionOrder::with(['product'])
+        ->where('status', 'pending') // فقط الطلبات الجديدة التي لم تُعالج بعد
+        ->orderBy('created_at', 'desc')
+        ->get();
+}
 
 
     public function getProductionNotes($orderId)

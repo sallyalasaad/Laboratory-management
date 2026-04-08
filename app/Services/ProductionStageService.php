@@ -14,23 +14,32 @@ class ProductionStageService
         $this->stageDao = $stageDao;
         $this->orderDao = $orderDao;
     }
-
     public function startOrder($orderId)
     {
         $order = $this->orderDao->findById($orderId);
-        if(!$order) return null;
 
-        $order = $this->orderDao->updateStatus($order, 'in_progress');
-
-        $activeStage = $this->stageDao->getActiveStage($orderId);
-        if(!$activeStage){
-            $stages = $this->stageDao->findByOrderId($orderId);
-            if($stages->count() > 0){
-                $this->stageDao->updateStatus($stages->first(), 'active');
-            }
+        if (!$order) {
+            return ['error' => true, 'message' => 'الطلب غير موجود', 'status_code' => 404];
         }
 
-        return $order;
+        if ($order->status === 'rejected') {
+            return ['error' => true, 'message' => 'تم رفض الطلب ولا يمكن بدء الإنتاج', 'order_status' => $order->status, 'status_code' => 422];
+        }
+
+        if ($order->status !== 'accepted') {
+            return ['error' => true, 'message' => 'لا يمكن بدء الطلب قبل القبول', 'order_status' => $order->status, 'status_code' => 422];
+        }
+
+        $order->status = 'in_progress';
+        $order->save();
+
+        $firstStage = $order->stages()->first();
+        if ($firstStage) {
+            $firstStage->status = 'active';
+            $firstStage->save();
+        }
+
+        return ['error' => false, 'message' => 'تم بدء الإنتاج', 'order_status' => $order->status, 'order_id' => $order->id];
     }
 
     public function completeStage($stageId)

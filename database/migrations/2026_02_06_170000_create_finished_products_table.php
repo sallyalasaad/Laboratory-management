@@ -13,7 +13,8 @@ return new class extends Migration
     {Schema::create('finished_products', function (Blueprint $table) {
         $table->id();
         $table->string('name');
-        $table->string('unit');
+        $table->decimal('size',8,4);  // 1، 3، 350
+        $table->string('unit');   // كيلو / غرام
         $table->text('description')->nullable();
         $table->timestamps();
     });
