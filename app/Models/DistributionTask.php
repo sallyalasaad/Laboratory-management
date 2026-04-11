@@ -8,8 +8,15 @@ class DistributionTask extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id','status','route','date'];
 
+    protected $fillable = [
+        'user_id',
+        'region_id',
+        'date',
+        'start_time',
+        'end_time',
+        'status'
+    ];
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -27,4 +34,21 @@ class DistributionTask extends Model
     {
         return $this->hasMany(Sale::class);
     }
+
+
+
+    public function region()
+    {
+        return $this->belongsTo(Region::class);
+    }
+
+    public function stores()
+    {
+        return $this->belongsToMany(
+            Store::class,
+            'task_stores'
+        )->withPivot('visited','visited_at');
+    }
+
+
 }

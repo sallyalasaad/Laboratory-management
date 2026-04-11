@@ -12,10 +12,22 @@ return new class extends Migration
     public function up(): void
     {Schema::create('distribution_tasks', function (Blueprint $table) {
         $table->id();
+
         $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-        $table->string('status')->default('pending');
-        $table->string('route')->nullable();
-        $table->date('date')->nullable();
+        $table->foreignId('region_id')->constrained()->cascadeOnDelete();
+
+        $table->date('date');
+
+        $table->time('start_time');
+        $table->time('end_time');
+
+        $table->enum('status', [
+            'pending',
+            'in_progress',
+            'completed',
+            'failed'
+        ])->default('pending');
+
         $table->timestamps();
     });
 

@@ -168,4 +168,49 @@ Route::middleware(['auth:sanctum'])->get(
 Route::middleware('role:production_employee|admin|super_admin')
     ->post('/production/tasks/{id}/confirm-receive',
         [RawMaterialTaskController::class, 'confirmReceiveinp']
-    );
+    );use App\Http\Controllers\DistributionTaskController;
+
+
+
+
+
+    ////توزيع سائق
+/*Route::middleware(['auth:sanctum', 'role:admin|super_admin'])->group(function () {
+
+    Route::prefix('distribution-tasks')->group(function () {
+
+        // إنشاء مهمة توزيع
+        Route::post('/', [DistributionTaskController::class, 'store']);
+
+
+
+        // (اختياري) تفاصيل مهمة
+        //عرض  السائقين
+        Route::get('/drivers', [DistributionTaskController::class, 'drivers']);
+    });
+
+});
+*/
+Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
+    ->prefix('distribution-tasks')
+    ->group(function () {
+        // إنشاء مهمة توزيع
+        Route::post('/', [DistributionTaskController::class, 'store']);
+
+//عرض  السائقين
+        Route::get('/drivers', [DistributionTaskController::class, 'drivers']);
+
+        // (اختياري) تفاصيل مهمة
+        Route::get('/{id}', [DistributionTaskController::class, 'show']);
+
+        // (اختياري) عرض كل المهام
+        Route::get('/', [DistributionTaskController::class, 'index']);
+
+        //تعديل مهمة
+        Route::put('/{id}', [DistributionTaskController::class, 'update']);
+
+        //مهام سائق معين
+        Route::get('/driver/{id}', [DistributionTaskController::class, 'driverTasks']);
+
+
+    });

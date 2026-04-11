@@ -41,7 +41,10 @@ class DatabaseSeeder extends Seeder
         // 4️⃣ بيانات المواد الأولية الأساسية
         $this->call(RawMaterialSeeder::class);
         $this->call(FinishedProductsSeeder::class);
-
+        $this->call([
+            RegionSeeder::class,
+            StoreSeeder::class,
+        ]);
     }
 
 }
