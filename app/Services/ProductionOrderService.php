@@ -56,38 +56,40 @@ class ProductionOrderService
         return $this->dao->updateStatus($order, $status);
     }
     public function getCurrentTasks()
-{
-    $orders = $this->dao->getCurrentOrders();
+    {
+        $orders = $this->dao->getCurrentOrders()
+            ->whereIn('status', ['in_progress']); // أو started حسب نظامك
 
-    return $orders->map(function ($order) {
-        return [
-            'task_number' => $order->order_number,
-            'status' => $order->status,
-            'product_name' => $order->product->name,
-            'product_size' => $order->product->size, // جديد
-            'product_unit' => $order->product->unit, // جديد
-            'quantity' => $order->quantity,
-            'date' => $order->created_at->format('Y-m-d'),
+        return $orders->map(function ($order) {
+            return [
+                'task_number' => $order->order_number,
+                'status' => $order->status,
+                'product_name' => $order->product->name,
+                'product_size' => $order->product->size,
+                'product_unit' => $order->product->unit,
+                'quantity' => $order->quantity,
+                'date' => $order->created_at->format('Y-m-d'),
 
-            'stages' => $order->stages->map(function ($stage) {
-                return [
-                    'stage_name' => $stage->stage_name,
-                    'status' => $stage->status
-                ];
-            }),
+                'stages' => $order->stages->map(function ($stage) {
+                    return [
+                        'stage_name' => $stage->stage_name,
+                        'status' => $stage->status
+                    ];
+                }),
 
-            'notes' => $order->notes->map(function ($note) {
-                return [
-                    'message' => $note->message,
-                    'from' => $note->fromUser?->name,
-                    'is_read' => $note->is_read,
-                    'date' => $note->created_at->format('Y-m-d H:i')
-                ];
-            }),
+                'notes' => $order->notes->map(function ($note) {
+                    return [
+                        'message' => $note->message,
+                        'from' => $note->fromUser?->name,
+                        'is_read' => $note->is_read,
+                        'date' => $note->created_at->format('Y-m-d H:i')
+                    ];
+                }),
 
-            'unread_notes' => $order->notes->where('is_read', false)->count()
-        ];
-    });
+                'unread_notes' => $order->notes->where('is_read', false)->count()
+            ];
+        });
+
 }
     public function getOrdersHistory()
     {

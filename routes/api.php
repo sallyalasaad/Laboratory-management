@@ -3,6 +3,7 @@
 use App\Http\Controllers\FinishedProductBatchController;
 use App\Http\Controllers\ProductionStageController;
 use App\Http\Controllers\RawMaterialTaskController;
+use App\Http\Controllers\RegionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
@@ -81,27 +82,20 @@ Route::middleware('auth:sanctum')->group(function () {
 ///notes for production
 Route::middleware(['auth:sanctum'])->group(function () {
 
-    Route::middleware('role:production_employee|admin|super_admin')
-->post('/production-notes', [ProductionOrderController::class, 'addProductionNote']);
-    Route::middleware('role:production_employee')
-        ->post('/production/notes/general', [ProductionOrderController::class, 'addGeneralNote']);
+    // إرسال ملاحظة
+    Route::post('/notes/send', [ProductionOrderController::class, 'sendNote']);
 
-    Route::middleware('role:production_employee|admin|super_admin')
-        ->get('/production-notes/{id}', [ProductionOrderController::class, 'getProductionNotes']);
+    // عرض كل الملاحظات
+    Route::get('/notes', [ProductionOrderController::class, 'notes']);
 
-    Route::middleware('role:production_employee|admin|super_admin')
-        ->patch('/notes/read/{id}', [ProductionOrderController::class, 'markAsRead']);
+    // عدد غير المقروء
+    Route::get('/notes/unread', [ProductionOrderController::class, 'unreadNotes']);
 
-    Route::middleware('role:production_employee|admin|super_admin')
-        ->get('/production-notes-unread/{id}', [ProductionOrderController::class, 'getUnreadCount']);
+    // تعليم كمقروءة
+    Route::patch('/notes/{id}/read', [ProductionOrderController::class, 'markAsRead']);
 
-
-    Route::middleware('role:production_employee|admin|super_admin')->delete('/notes/{id}', [ProductionOrderController::class, 'deleteNote']);
-
-
-
-
-
+    // حذف
+    Route::delete('/notes/{id}', [ProductionOrderController::class, 'deleteNote']);
 });
 
 
@@ -152,6 +146,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // عرض Batches
     Route::middleware('role:production_employee|admin|super_admin')
         ->get('/production-orders/{orderId}/batches', [FinishedProductBatchController::class, 'list1']);
+
     Route::middleware('role:production_employee')->get('/production/incoming', [ProductionOrderController::class, 'incomingTasks']);
 });
 // عرض طلبات الإنتاج stages
@@ -174,23 +169,7 @@ Route::middleware('role:production_employee|admin|super_admin')
 
 
 
-    ////توزيع سائق
-/*Route::middleware(['auth:sanctum', 'role:admin|super_admin'])->group(function () {
 
-    Route::prefix('distribution-tasks')->group(function () {
-
-        // إنشاء مهمة توزيع
-        Route::post('/', [DistributionTaskController::class, 'store']);
-
-
-
-        // (اختياري) تفاصيل مهمة
-        //عرض  السائقين
-        Route::get('/drivers', [DistributionTaskController::class, 'drivers']);
-    });
-
-});
-*/
 Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
     ->prefix('distribution-tasks')
     ->group(function () {
@@ -199,6 +178,10 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
 
 //عرض  السائقين
         Route::get('/drivers', [DistributionTaskController::class, 'drivers']);
+
+        /* عرض المناطق*/
+
+        Route::get('/regions', [RegionController::class, 'index']);
 
         // (اختياري) تفاصيل مهمة
         Route::get('/{id}', [DistributionTaskController::class, 'show']);
@@ -213,4 +196,35 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
         Route::get('/driver/{id}', [DistributionTaskController::class, 'driverTasks']);
 
 
+        /**
+         * عرض المهام اليومية
+         */
+        Route::get('/distribution-tasks/today', [DistributionTaskController::class, 'todayTasks']);
+
+
+
+        /**
+         * عرض المهام اليومية لسائق معين
+         */
+        Route::get('/distribution-tasks/driver/{driverId}/today',
+            [DistributionTaskController::class, 'driverTodayTasks']
+        );
     });
+Route::middleware(['auth:sanctum', 'role:driver|admin|super_admin'])->group(function () {
+
+    // عرض المهمة الحالية
+    Route::get('/my-tasks/today', [DistributionTaskController::class, 'myTodayTask']);
+
+    // بدء المهمة
+    Route::post('/my-tasks/{id}/start', [DistributionTaskController::class, 'startTask']);
+
+    // زيارة محل
+    Route::post('/my-tasks/{taskId}/store/{storeId}/visit',
+        [DistributionTaskController::class, 'visitStore']
+    );
+
+    // إنهاء المهمة
+    Route::post('/my-tasks/{id}/complete',
+        [DistributionTaskController::class, 'completeTask']
+    );
+});
