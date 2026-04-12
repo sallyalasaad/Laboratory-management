@@ -23,7 +23,7 @@ class ProductionOrderController extends Controller
     public function create(Request $request)
     {
         $request->validate([
-         
+
             'user_id' => 'required|integer|exists:users,id',
             'finished_product_id' => 'required|integer|exists:finished_products,id',
             'quantity' => 'required|numeric|min:0.01',
@@ -61,123 +61,86 @@ class ProductionOrderController extends Controller
             $this->service->getIncomingTasks()
         );
     }
-    public function addProductionNote(Request $request)
+
+    // 🟢 إرسال ملاحظة (موظف أو أدمن)
+    public function sendNote(Request $request)
     {
         $request->validate([
-            'production_order_id' => 'required|exists:production_orders,id',
+            'to_user_id' => 'required|exists:users,id',
             'message' => 'required|string'
         ]);
 
         $user = auth()->user();
 
         $note = Note::create([
-            'production_order_id' => $request->production_order_id,
             'from_user_id' => $user->id,
-            'to_user_id' => null, // أو حدد موظف
+            'to_user_id' => $request->to_user_id,
             'message' => $request->message,
-            'is_read' => false
+            'is_read' => false,
+            'production_order_id' => null // ملاحظة عامة
         ]);
 
         return response()->json([
-            'message' => 'تمت إضافة الملاحظة',
+            'message' => 'تم إرسال الملاحظة',
             'note' => $note
         ]);
     }
 
-    ////🙂
-    public function addGeneralNote(Request $request)
+    // 🟢 عرض كل الملاحظات (Inbox + Sent)
+    public function notes()
     {
-        $request->validate([
-            'message' => 'required|string'
-        ]);
-
         $user = auth()->user();
 
-        // جلب الأدمن
-        $admin = User::role('admin')->first();
-
-        if (!$admin) {
-            return response()->json(['message' => 'Admin not found'], 404);
-        }
-
-        // إنشاء الملاحظة بدون ربط بـ production_order_id
-        $note = Note::create([
-            'production_order_id' => null,
-            'from_user_id' => $user->id,
-            'to_user_id' => $admin->id,
-            'message' => $request->message,
-            'is_read' => false
-        ]);
-
-        return response()->json([
-            'message' => 'تمت إضافة الملاحظة العامة بنجاح',
-            'note' => $note
-        ]);
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // 🟢 6. عرض ملاحظات طلب
-    public function getProductionNotes($orderId)
-    {
         $notes = Note::with('fromUser')
-            ->where('production_order_id', $orderId)
+            ->where(function ($q) use ($user) {
+                $q->where('to_user_id', $user->id)
+                    ->orWhere('from_user_id', $user->id);
+            })
+            ->whereNull('production_order_id') // فقط العامة
             ->orderBy('created_at', 'desc')
             ->get();
 
         return response()->json($notes);
     }
 
-    // 🟢 7. تعليم كمقروءة
-    public function markAsRead($id)
+    // 🟢 عدد غير المقروء
+    public function unreadNotes()
     {
-        $note = Note::findOrFail($id);
-        $note->is_read = true;
-        $note->save();
-
-        return response()->json([
-            'message' => 'تم قراءة الملاحظة'
-        ]);
-    }
-
-    // 🟢 8. عدد غير المقروء
-    public function getUnreadCount($orderId)
-    {
-        $count = Note::where('production_order_id', $orderId)
+        $count = Note::where('to_user_id', auth()->id())
             ->where('is_read', false)
+            ->whereNull('production_order_id')
             ->count();
 
-        return response()->json([
-            'count' => $count
-        ]);
+        return response()->json(['count' => $count]);
     }
 
-    // 🟢 9. حذف ملاحظة (اختياري)
+    // 🟢 تعليم كمقروءة
+    public function markAsRead($id)
+    {
+        $note = Note::where('id', $id)
+            ->where('to_user_id', auth()->id())
+            ->firstOrFail();
+
+        $note->update(['is_read' => true]);
+
+        return response()->json(['message' => 'تم القراءة']);
+    }
+
+    // 🟢 حذف ملاحظة
     public function deleteNote($id)
     {
-        $note = Note::findOrFail($id);
+        $note = Note::where(function ($q) {
+            $q->where('from_user_id', auth()->id())
+                ->orWhere('to_user_id', auth()->id());
+        })
+            ->findOrFail($id);
+
         $note->delete();
 
-        return response()->json([
-            'message' => 'تم حذف الملاحظة'
-        ]);
+        return response()->json(['message' => 'تم حذف الملاحظة']);
     }
+
+
     // 🟢 كل الطلبات
     public function allOrders()
     {
