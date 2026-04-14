@@ -26,4 +26,8 @@ class Store extends Model
             'task_stores'
         )->withPivot('visited','visited_at');
     }
+    public function sales()
+    {
+        return $this->hasMany(Sale::class);
+    }
 }

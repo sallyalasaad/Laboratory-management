@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\FinishedProductBatchController;
+use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ProductionStageController;
 use App\Http\Controllers\RawMaterialTaskController;
 use App\Http\Controllers\RegionController;
+use App\Http\Controllers\SaleController;
+use App\Http\Controllers\StoreController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
@@ -229,4 +232,19 @@ Route::middleware(['auth:sanctum', 'role:driver|admin|super_admin'])->group(func
     );
     //عرض المهام اليومية من قبل  السائق
     Route::get('/my-tasks/daily', [DistributionTaskController::class, 'myDailyTasks']);
+});
+Route::middleware(['auth:sanctum', 'role:driver'])->group(function () {
+
+    // 🔹 1. قراءة الباركود
+    Route::post('/scan-store', [StoreController::class, 'scanStore']);
+
+    // 🔹 2. إنشاء عملية بيع (draft)
+    Route::post('/sales', [SaleController::class, 'createSale']);
+
+    // 🔹 3. إضافة منتجات للفاتورة
+    Route::post('/sales/{saleId}/items', [SaleController::class, 'addItems']);
+
+    // 🔹 4. تأكيد الفاتورة
+    Route::post('/sales/{saleId}/confirm', [InvoiceController::class, 'confirmSale']);
+
 });

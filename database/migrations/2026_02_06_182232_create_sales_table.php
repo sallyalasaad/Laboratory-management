@@ -13,6 +13,20 @@ return new class extends Migration
     {
         Schema::create('sales', function (Blueprint $table) {
             $table->id();
+
+            $table->foreignId('store_id')
+                ->constrained('stores')
+                ->cascadeOnDelete();
+
+            $table->foreignId('distribution_task_id')
+                ->constrained('distribution_tasks')
+                ->cascadeOnDelete();
+
+            $table->date('date');
+            $table->decimal('total_amount', 10, 2)->default(0);
+
+            $table->enum('status', ['draft', 'confirmed'])->default('draft');
+
             $table->timestamps();
         });
     }

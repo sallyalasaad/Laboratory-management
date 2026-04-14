@@ -398,23 +398,18 @@ class DistributionTaskController extends Controller
         if ($now->gt($end)) {
             return response()->json(['message' => 'Task expired'], 400);
         }
-        // منع وجود مهمة شغالة
-        $active = DistributionTask::where('user_id', $request->user()->id)
-            ->where('status', 'in_progress')
-            ->exists();
 
-        if ($active) {
-            return response()->json(['message' => 'You already have active task'], 400);
+        if ($task->status === 'in_progress') {
+            return response()->json(['message' => 'Task already started'], 400);
         }
 
-        // تغيير الحالة
         $task->update(['status' => 'in_progress']);
 
         return response()->json(['message' => 'Task started']);
     }
 
 ///زيارة محل
-    public function visitStore($taskId, $storeId, Request $request)
+   /* public function visitStore($taskId, $storeId, Request $request)
     {
         $task = DistributionTask::where('id', $taskId)
             ->where('user_id', $request->user()->id)
@@ -469,7 +464,7 @@ class DistributionTaskController extends Controller
         return response()->json([
             'message' => 'Store visited'
         ]);
-    }
+    }*/
 ///إنهاء المهمة
     public function completeTask($id, Request $request)
     {
@@ -478,16 +473,14 @@ class DistributionTaskController extends Controller
             ->firstOrFail();
 
         $now = now();
-
         $end = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
 
-        if ($task->status !== 'in_progress' && $task->status !== 'ready_to_complete') {
+        if (!in_array($task->status, ['in_progress', 'ready_to_complete'])) {
             return response()->json([
                 'message' => 'Task not allowed to complete'
             ], 400);
         }
 
-        // إذا انتهى الوقت → فشل مباشر
         if ($now->gt($end)) {
             $task->update(['status' => 'failed']);
 
@@ -496,7 +489,7 @@ class DistributionTaskController extends Controller
             ], 400);
         }
 
-        // شرط صارم: لازم كل المحلات تكون visited = true
+        // ✅ تحقق من زيارة كل المحلات
         $unvisited = $task->stores()
             ->wherePivot('visited', false)
             ->exists();
@@ -504,6 +497,17 @@ class DistributionTaskController extends Controller
         if ($unvisited) {
             return response()->json([
                 'message' => 'You must visit all stores before completing the task'
+            ], 400);
+        }
+
+        // ✅ تحقق من وجود مبيعات
+        $hasSales = \App\Models\Sale::where('distribution_task_id', $task->id)
+            ->where('status', 'confirmed')
+            ->exists();
+
+        if (!$hasSales) {
+            return response()->json([
+                'message' => 'لا يمكن إنهاء المهمة بدون مبيعات'
             ], 400);
         }
 

@@ -18,7 +18,6 @@ class FinishedProductBatchController extends Controller
         $request->validate([
             'finished_product_id'=>'required|integer|exists:finished_products,id',
             'production_order_id'=>'required|integer|exists:production_orders,id',
-            'batch_number'=>'required|string',
             'quantity'=>'required|numeric|min:0.01',
             'production_date'=>'required|date'
         ]);
@@ -26,7 +25,6 @@ class FinishedProductBatchController extends Controller
         $batch = $this->service->createBatch(
             $request->finished_product_id,
             $request->production_order_id,
-            $request->batch_number,
             $request->quantity,
             $request->production_date
         );

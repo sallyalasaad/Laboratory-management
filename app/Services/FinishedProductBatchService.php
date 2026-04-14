@@ -2,7 +2,7 @@
 namespace App\Services;
 
 use App\DAO\FinishedProductBatchDAO;
-
+use Illuminate\Support\Str;
 class FinishedProductBatchService
 {
     protected $dao;
@@ -12,14 +12,17 @@ class FinishedProductBatchService
         $this->dao = $dao;
     }
 
-    public function createBatch($finishedProductId, $productionOrderId, $batchNumber, $quantity, $productionDate)
+    public function createBatch($finishedProductId, $productionOrderId, $quantity, $productionDate)
     {
         return $this->dao->create([
-            'finished_product_id'=>$finishedProductId,
-            'production_order_id'=>$productionOrderId,
-            'batch_number'=>$batchNumber,
-            'quantity'=>$quantity,
-            'production_date'=>$productionDate
+            'finished_product_id' => $finishedProductId,
+            'production_order_id' => $productionOrderId,
+
+            // 🔥 توليد تلقائي
+            'batch_number' => 'BATCH-' . now()->format('Ymd') . '-' . Str::random(4),
+
+            'quantity' => $quantity,
+            'production_date' => $productionDate
         ]);
     }
 

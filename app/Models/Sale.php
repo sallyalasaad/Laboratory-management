@@ -9,7 +9,8 @@ class Sale extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['distribution_task_id','total_amount'];
+    protected $fillable = ['store_id','distribution_task_id','date','total_amount',    'status',
+    ];
 
     public function distributionTask()
     {
@@ -27,6 +28,10 @@ class Sale extends Model
     public function invoice()
     {
         return $this->hasOne(Invoice::class);
+    }
+    public function store()
+    {
+        return $this->belongsTo(Store::class);
     }
 
 }
