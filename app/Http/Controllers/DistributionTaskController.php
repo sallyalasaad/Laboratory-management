@@ -109,11 +109,18 @@ class DistributionTaskController extends Controller
      */
     public function show($id)
     {
-        $task = DistributionTask::with([
-            'user',
-            'region',
-            'stores'
-        ])->findOrFail($id);
+        $task = DistributionTask::with(['user', 'region', 'stores'])
+            ->findOrFail($id);
+
+        $task->stores = $task->stores->map(function ($store) {
+            return [
+                'id' => $store->id,
+                'name' => $store->name,
+                'lat' => $store->lat,
+                'lng' => $store->lng,
+                'visited' => $store->pivot->visited,
+            ];
+        });
 
         return response()->json($task);
     }
@@ -258,6 +265,17 @@ class DistributionTaskController extends Controller
             ->whereDate('date', now()->toDateString())
             ->get()
             ->map(function ($task) {
+
+                $stores = $task->stores->map(function ($store) {
+                    return [
+                        'id' => $store->id,
+                        'name' => $store->name,
+                        'lat' => $store->lat,
+                        'lng' => $store->lng,
+                        'visited' => $store->pivot->visited,
+                    ];
+                });
+
                 return [
                     'id' => $task->id,
                     'date' => $task->date,
@@ -265,8 +283,9 @@ class DistributionTaskController extends Controller
                     'status' => $task->status,
                     'driver' => $task->user->name,
                     'region' => $task->region->name,
-                    'stores_count' => $task->stores->count(),
-                    'visited_count' => $task->stores->where('pivot.visited', true)->count(),
+                    'stores_count' => $stores->count(),
+                    'visited_count' => $stores->where('visited', true)->count(),
+                    'stores' => $stores
                 ];
             });
 
@@ -277,6 +296,8 @@ class DistributionTaskController extends Controller
     /**
      * عرض المهام اليومية لسائق معين
      */
+
+
     public function driverTodayTasks($driverId)
     {
         $tasks = DistributionTask::with(['region', 'stores'])
@@ -284,14 +305,26 @@ class DistributionTaskController extends Controller
             ->whereDate('date', now()->toDateString())
             ->get()
             ->map(function ($task) {
+
+                $stores = $task->stores->map(function ($store) {
+                    return [
+                        'id' => $store->id,
+                        'name' => $store->name,
+                        'lat' => $store->lat,
+                        'lng' => $store->lng,
+                        'visited' => $store->pivot->visited,
+                    ];
+                });
+
                 return [
                     'id' => $task->id,
                     'date' => $task->date,
                     'time' => $task->start_time . ' - ' . $task->end_time,
                     'status' => $task->status,
                     'region' => $task->region->name,
-                    'stores_total' => $task->stores->count(),
-                    'visited' => $task->stores->where('pivot.visited', true)->count(),
+                    'stores_total' => $stores->count(),
+                    'visited' => $stores->where('visited', true)->count(),
+                    'stores' => $stores
                 ];
             });
 
@@ -339,6 +372,8 @@ class DistributionTaskController extends Controller
                     'id' => $store->id,
                     'name' => $store->name,
                     'visited' => $store->pivot->visited,
+                    'lat' => $store->lat,       // خط العرض
+                    'lng' => $store->lng        // خط الطول
                 ];
             })
         ]);
@@ -480,8 +515,50 @@ class DistributionTaskController extends Controller
     }
 
 
+///عرض المهام اليومية من قبل  السائق
+    public function myDailyTasks()
+    {
+        $user = auth()->user();
 
+        $todayTasks = DistributionTask::with(['region', 'stores'])
+            ->where('user_id', $user->id)
+            ->whereDate('date', now()->toDateString())
+            ->get()
+            ->map(function ($task) {
 
+                $stores = $task->stores->map(function ($store) {
+                    return [
+                        'id' => $store->id,
+                        'name' => $store->name,
+                        'lat' => $store->lat,
+                        'lng' => $store->lng,
+                        'visited' => $store->pivot->visited,
+                    ];
+                });
+
+                return [
+                    'id' => $task->id,
+                    'date' => $task->date,
+                    'time' => $task->start_time . ' - ' . $task->end_time,
+                    'status' => $task->status,
+                    'region' => $task->region->name,
+                    'stores_count' => $stores->count(),
+                    'visited_count' => $stores->where('visited', true)->count(),
+                    'stores' => $stores
+                ];
+            });
+
+        $currentTask = DistributionTask::where('user_id', $user->id)
+            ->whereDate('date', now()->toDateString())
+            ->whereTime('start_time', '<=', now())
+            ->whereTime('end_time', '>=', now())
+            ->first();
+
+        return response()->json([
+            'current_task' => $currentTask,
+            'daily_tasks' => $todayTasks
+        ]);
+    }
 
 
 

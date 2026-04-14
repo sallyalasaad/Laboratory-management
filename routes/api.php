@@ -227,4 +227,6 @@ Route::middleware(['auth:sanctum', 'role:driver|admin|super_admin'])->group(func
     Route::post('/my-tasks/{id}/complete',
         [DistributionTaskController::class, 'completeTask']
     );
+    //عرض المهام اليومية من قبل  السائق
+    Route::get('/my-tasks/daily', [DistributionTaskController::class, 'myDailyTasks']);
 });
