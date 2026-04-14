@@ -42,6 +42,7 @@ class FinishedProductTaskService
         $batches = FinishedProductBatch::where('finished_product_id', $finishedProductId)
             ->where('remaining_quantity', '>', 0)
             ->orderBy('production_date', 'asc')
+            ->lockForUpdate()
             ->get();
 
         $allocations = [];
@@ -89,7 +90,7 @@ class FinishedProductTaskService
 
                 foreach ($allocs as $alloc) {
                     $batch = FinishedProductBatch::find($alloc['batch_id']);
-                    $batch->remaining_quantity -= $alloc['quantity'];
+                    $batch->remaining_quantity = max(0, ($batch->remaining_quantity ?? 0) - $alloc['quantity']);
                     $batch->save();
 
                     $createdAllocations[] = [

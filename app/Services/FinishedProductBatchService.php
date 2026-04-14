@@ -19,6 +19,7 @@ class FinishedProductBatchService
             'production_order_id'=>$productionOrderId,
             'batch_number'=>$batchNumber,
             'quantity'=>$quantity,
+             'remaining_quantity' => $quantity,
             'production_date'=>$productionDate
         ]);
     }
