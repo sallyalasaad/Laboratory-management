@@ -3,6 +3,9 @@ namespace App\Services;
 
 use App\DAO\FinishedProductBatchDAO;
 use Illuminate\Support\Str;
+namespace App\Services;
+
+
 class FinishedProductBatchService
 {
     protected $dao;
@@ -18,10 +21,14 @@ class FinishedProductBatchService
             'finished_product_id' => $finishedProductId,
             'production_order_id' => $productionOrderId,
 
-            // 🔥 توليد تلقائي
+            // ✅ توليد تلقائي للـ batch number
             'batch_number' => 'BATCH-' . now()->format('Ymd') . '-' . Str::random(4),
 
             'quantity' => $quantity,
+
+            // 🔥 أهم شيء (لازم تبقى)
+            'remaining_quantity' => $quantity,
+
             'production_date' => $productionDate
         ]);
     }

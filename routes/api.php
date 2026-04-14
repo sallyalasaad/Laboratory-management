@@ -1,7 +1,12 @@
 <?php
 
 use App\Http\Controllers\FinishedProductBatchController;
+<<<<<<< HEAD
 use App\Http\Controllers\InvoiceController;
+=======
+use App\Http\Controllers\FinishedProductTaskController;
+use App\Http\Controllers\FinishedProductWarehouseController;
+>>>>>>> ca74fce39943d4e45087171ff0d05f9a6aedae14
 use App\Http\Controllers\ProductionStageController;
 use App\Http\Controllers\RawMaterialTaskController;
 use App\Http\Controllers\RegionController;
@@ -166,7 +171,20 @@ Route::middleware(['auth:sanctum'])->get(
 Route::middleware('role:production_employee|admin|super_admin')
     ->post('/production/tasks/{id}/confirm-receive',
         [RawMaterialTaskController::class, 'confirmReceiveinp']
-    );use App\Http\Controllers\DistributionTaskController;
+    );
+// Finished Product Tasks
+//Route::middleware(['auth:sanctum'])->group(function () {
+    // Admin creates send task
+    Route::middleware(['role:admin|super_admin'])->post('/finished-product-tasks/send', [FinishedProductTaskController::class, 'createSendTask']);
+
+    // Warehouse keeper confirms sending
+    Route::middleware(['role:product_storekeeper|admin|super_admin'])->post('/finished-product-tasks/{id}/confirm-send', [FinishedProductTaskController::class, 'confirmSend']);
+//});
+
+
+
+
+    use App\Http\Controllers\DistributionTaskController;
 
 
 

@@ -7,8 +7,17 @@ use Illuminate\Database\Eloquent\Model;
 class FinishedProductBatch extends Model
 {
     use HasFactory;
-    protected $fillable = ['finished_product_id','production_order_id','batch_number','quantity','production_date','expiry_date'];
 
+    protected $fillable = ['finished_product_id','production_order_id','batch_number','quantity','remaining_quantity','production_date','expiry_date'];
+
+    protected static function booted()
+    {
+        static::creating(function (FinishedProductBatch $batch) {
+            if ($batch->remaining_quantity === null && isset($batch->quantity)) {
+                $batch->remaining_quantity = $batch->quantity;
+            }
+        });
+    }
 
     public function finishedProduct()
     {
