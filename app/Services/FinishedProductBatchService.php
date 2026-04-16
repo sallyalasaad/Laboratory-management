@@ -1,10 +1,9 @@
 <?php
+
 namespace App\Services;
 
 use App\DAO\FinishedProductBatchDAO;
 use Illuminate\Support\Str;
-namespace App\Services;
-
 
 class FinishedProductBatchService
 {
