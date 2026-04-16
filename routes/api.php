@@ -192,11 +192,6 @@ Route::middleware('role:production_employee|admin|super_admin')
 //});
 
 
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\DistributionTaskController;
-use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\SaleController;
 
 
 Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
