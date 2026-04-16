@@ -31,12 +31,8 @@ Route::post('/login', [AuthController::class,'login']);
 Route::post('/password/forgot', [AuthController::class,'sendResetPasswordOtp']);
 Route::post('/password/reset', [AuthController::class,'resetPassword']);
 
-/*
-|--------------------------------------------------------------------------
-| Admin / Super Admin
-|--------------------------------------------------------------------------
-*/
 
+// Admin + Super Admin
 Route::middleware(['auth:sanctum', 'role:admin|super_admin'])->group(function () {
 
     Route::post('/employee', [AdminController::class,'createEmployee']);
@@ -45,8 +41,12 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])->group(function ()
     Route::delete('/user/{id}', [AdminController::class,'deleteUser']);
     Route::patch('/user/{id}/toggle', [AdminController::class,'toggleVerify']);
 
-    // إنشاء مدير (super admin only endpoint inline handled)
-    Route::post('/create-admin', function (Request $request) {
+});
+
+
+// فقط Super Admin
+Route::middleware(['auth:sanctum', 'role:super_admin'])
+    ->post('/create-admin', function (\Illuminate\Http\Request $request) {
 
         $request->validate([
             'name'     => 'required|string',
@@ -66,163 +66,211 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])->group(function ()
         $user->assignRole('admin');
 
         return response()->json([
-            'message' => 'Admin created successfully',
-            'data' => $user
+            'message' => 'تم إنشاء مدير بنجاح',
+            'data'    => $user
         ]);
-    })->middleware('role:super_admin');
+    });
+
+
+// Raw material tasks: create by admin, handled by warehouse user
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/tasks/raw-materials/receive', [\App\Http\Controllers\RawMaterialTaskController::class, 'createReceiveTask']);
+    Route::post('/tasks/raw-materials/send', [\App\Http\Controllers\RawMaterialTaskController::class, 'createSendTask']);
+
+    // warehouse endpoints
+    Route::get('/tasks/raw-materials', [\App\Http\Controllers\RawMaterialTaskController::class, 'listTasks']);
+    Route::middleware(['role:admin|super_admin'])->get('/tasks/raw-materials/admin', [\App\Http\Controllers\RawMaterialTaskController::class, 'adminListTasks']);
+    // Warehouse: submit receive input (does not change inventory yet)
+    Route::post('/tasks/raw-materials/{id}/submit-receive-input', [\App\Http\Controllers\RawMaterialTaskController::class, 'submitReceiveInput']);
+
+    // Warehouse: confirm the receive to actually update inventory
+    Route::post('/tasks/raw-materials/{id}/confirm-receive', [\App\Http\Controllers\RawMaterialTaskController::class, 'confirmReceive']);
+    Route::post('/tasks/raw-materials/{id}/confirm-send', [\App\Http\Controllers\RawMaterialTaskController::class, 'confirmSend']);
+
+    // inventory summary
+    Route::get('/inventory/summary', [\App\Http\Controllers\RawMaterialTaskController::class, 'inventorySummary']);
+
+    // Notes for raw material tasks
+    Route::post('/tasks/raw-materials/notes', [\App\Http\Controllers\RawMaterialTaskController::class, 'addNote']);
+    Route::middleware(['role:admin|super_admin'])->get('/task/raw-materials/notes', [\App\Http\Controllers\RawMaterialTaskController::class, 'adminListNotes']);
+    Route::middleware(['role:admin|super_admin'])->patch('/tasks/raw-materials/notes/{noteId}/mark-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'markNoteRead']);
+    Route::middleware(['role:admin|super_admin'])->delete('/tasks/raw-materials/{id}/notes/delete-read', [\App\Http\Controllers\RawMaterialTaskController::class, 'deleteReadNotes']);
 });
 
-/*
-|--------------------------------------------------------------------------
-| Raw Material Tasks
-|--------------------------------------------------------------------------
-*/
+///notes for production
+Route::middleware(['auth:sanctum'])->group(function () {
+
+    // إرسال ملاحظة
+    Route::post('/notes/send', [ProductionOrderController::class, 'sendNote']);
+
+    // عرض كل الملاحظات
+    Route::get('/notes', [ProductionOrderController::class, 'notes']);
+
+    // عدد غير المقروء
+    Route::get('/notes/unread', [ProductionOrderController::class, 'unreadNotes']);
+
+    // تعليم كمقروءة
+    Route::patch('/notes/{id}/read', [ProductionOrderController::class, 'markAsRead']);
+
+    // حذف
+    Route::delete('/notes/{id}', [ProductionOrderController::class, 'deleteNote']);
+});
+
 
 Route::middleware(['auth:sanctum'])->group(function () {
 
-    Route::post('/tasks/raw-materials/receive', [RawMaterialTaskController::class,'createReceiveTask']);
-    Route::post('/tasks/raw-materials/send', [RawMaterialTaskController::class,'createSendTask']);
+    // إنشاء طلب إنتاج (Admin فقط)
+    Route::middleware('role:admin|super_admin')
+        ->post('/production-orders', [ProductionOrderController::class, 'create']);
 
-    Route::get('/tasks/raw-materials', [RawMaterialTaskController::class,'listTasks']);
-    Route::get('/tasks/raw-materials/admin', [RawMaterialTaskController::class,'adminListTasks'])
-        ->middleware('role:admin|super_admin');
+    // عرض طلبات الإنتاج (موظف الإنتاج + الإدارة)
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production-orders', [ProductionOrderController::class, 'currentTasks']);
+//عرض سجل الطلبات
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/ordersHistory', [ProductionOrderController::class, 'ordersHistory']);
+    //عرض كل الطلبات
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/allorders', [ProductionOrderController::class, 'allorders']);
+    ///عرص طلب معين
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/order/{id}', [ProductionOrderController::class, 'show']);
 
-    Route::post('/tasks/raw-materials/{id}/submit-receive-input', [RawMaterialTaskController::class,'submitReceiveInput']);
-    Route::post('/tasks/raw-materials/{id}/confirm-receive', [RawMaterialTaskController::class,'confirmReceive']);
-    Route::post('/tasks/raw-materials/{id}/confirm-send', [RawMaterialTaskController::class,'confirmSend']);
+    // بدء الطلب
+    Route::middleware('role:production_employee')
+        ->post('/production-orders/{orderId}/start', [ProductionStageController::class, 'startOrder']);
+// قبول طلب الإنتاج
+    Route::middleware('role:production_employee')->post('/production-orders/{orderId}/accept',
+        [ProductionStageController::class,'acceptOrder']);
+    // رفض الطلب
+    Route::middleware('role:production_employee')->post('/production-orders/{orderId}/reject',
+        [ProductionStageController::class,'rejectOrder']);
+    // إيقاف الطلب
+    Route::middleware('role:production_employee')
+        ->post('/production-orders/{orderId}/pause', [ProductionStageController::class, 'pauseOrder']);
 
-    Route::get('/inventory/summary', [RawMaterialTaskController::class,'inventorySummary']);
+    // استئناف الطلب
+    Route::middleware('role:production_employee')
+        ->post('/production-orders/{orderId}/resume', [ProductionStageController::class, 'resumeOrder']);
 
-    Route::post('/tasks/raw-materials/notes', [RawMaterialTaskController::class,'addNote']);
+    // إنهاء مرحلة
+    Route::middleware('role:production_employee')
+        ->post('/production-stages/{stageId}/complete', [ProductionStageController::class, 'completeStage']);
 
-    Route::get('/task/raw-materials/notes', [RawMaterialTaskController::class,'adminListNotes'])
-        ->middleware('role:admin|super_admin');
+    // إنشاء Batch للمنتج النهائي
+    Route::middleware('role:production_employee')
+        ->post('/finished-product-batches', [FinishedProductBatchController::class, 'create']);
 
-    Route::patch('/tasks/raw-materials/notes/{noteId}/mark-read', [RawMaterialTaskController::class,'markNoteRead'])
-        ->middleware('role:admin|super_admin');
+    // عرض Batches
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production-orders/{orderId}/batches', [FinishedProductBatchController::class, 'list1']);
 
-    Route::delete('/tasks/raw-materials/{id}/notes/delete-read', [RawMaterialTaskController::class,'deleteReadNotes'])
-        ->middleware('role:admin|super_admin');
+    Route::middleware('role:production_employee')->get('/production/incoming', [ProductionOrderController::class, 'incomingTasks']);
 });
+// عرض طلبات الإنتاج stages
+Route::middleware(['auth:sanctum'])->get(
+    '/production-orders/{orderId}/stages',
+    [ProductionOrderController::class, 'listOrders']
+);
 
-/*
-|--------------------------------------------------------------------------
-| Production Orders
-|--------------------------------------------------------------------------
-*/
+// عرض مهام الإنتاج
+/*Route::middleware('role:production_employee|admin|super_admin')
+    ->get('/production/tasks', [RawMaterialTaskController::class, 'productionTasks']);*/
 
-Route::middleware(['auth:sanctum'])->group(function () {
+// تأكيد الاستلام من قبل الإنتاج
+Route::middleware('role:production_employee|admin|super_admin')
+    ->post('/production/tasks/{id}/confirm-receive',
+        [RawMaterialTaskController::class, 'confirmReceiveinp']
+    );
+// Finished Product Tasks
+//Route::middleware(['auth:sanctum'])->group(function () {
+    // Admin creates send task
+    Route::middleware(['role:admin|super_admin'])->post('/finished-product-tasks/send', [FinishedProductTaskController::class, 'createSendTask']);
 
-    Route::post('/notes/send', [ProductionOrderController::class,'sendNote']);
-    Route::get('/notes', [ProductionOrderController::class,'notes']);
-    Route::get('/notes/unread', [ProductionOrderController::class,'unreadNotes']);
-    Route::patch('/notes/{id}/read', [ProductionOrderController::class,'markAsRead']);
-    Route::delete('/notes/{id}', [ProductionOrderController::class,'deleteNote']);
+    // Warehouse keeper confirms sending
+    Route::middleware(['role:product_storekeeper|admin|super_admin'])->post('/finished-product-tasks/{id}/confirm-send', [FinishedProductTaskController::class, 'confirmSend']);
+//});
 
-    Route::post('/production-orders', [ProductionOrderController::class,'create'])
-        ->middleware('role:admin|super_admin');
 
-    Route::get('/production-orders', [ProductionOrderController::class,'currentTasks'])
-        ->middleware('role:production_employee|admin|super_admin');
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DistributionTaskController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\SaleController;
 
-    Route::get('/ordersHistory', [ProductionOrderController::class,'ordersHistory'])
-        ->middleware('role:production_employee|admin|super_admin');
-
-    Route::get('/allorders', [ProductionOrderController::class,'allorders'])
-        ->middleware('role:production_employee|admin|super_admin');
-
-    Route::get('/order/{id}', [ProductionOrderController::class,'show'])
-        ->middleware('role:production_employee|admin|super_admin');
-
-    Route::post('/production-orders/{orderId}/start', [ProductionStageController::class,'startOrder'])
-        ->middleware('role:production_employee');
-
-    Route::post('/production-orders/{orderId}/accept', [ProductionStageController::class,'acceptOrder'])
-        ->middleware('role:production_employee');
-
-    Route::post('/production-orders/{orderId}/reject', [ProductionStageController::class,'rejectOrder'])
-        ->middleware('role:production_employee');
-
-    Route::post('/production-orders/{orderId}/pause', [ProductionStageController::class,'pauseOrder'])
-        ->middleware('role:production_employee');
-
-    Route::post('/production-orders/{orderId}/resume', [ProductionStageController::class,'resumeOrder'])
-        ->middleware('role:production_employee');
-
-    Route::post('/production-stages/{stageId}/complete', [ProductionStageController::class,'completeStage'])
-        ->middleware('role:production_employee');
-
-    Route::post('/finished-product-batches', [FinishedProductBatchController::class,'create'])
-        ->middleware('role:production_employee');
-
-    Route::get('/production-orders/{orderId}/batches', [FinishedProductBatchController::class,'list1'])
-        ->middleware('role:production_employee|admin|super_admin');
-
-    Route::get('/production/incoming', [ProductionOrderController::class,'incomingTasks'])
-        ->middleware('role:production_employee');
-
-    Route::get('/production-orders/{orderId}/stages', [ProductionOrderController::class,'listOrders']);
-});
-
-/*
-|--------------------------------------------------------------------------
-| Finished Product Tasks
-|--------------------------------------------------------------------------
-*/
-
-Route::middleware(['auth:sanctum'])->group(function () {
-
-    Route::post('/finished-product-tasks/send', [FinishedProductTaskController::class,'createSendTask'])
-        ->middleware('role:admin|super_admin');
-
-    Route::post('/finished-product-tasks/{id}/confirm-send', [FinishedProductTaskController::class,'confirmSend'])
-        ->middleware('role:product_storekeeper|admin|super_admin');
-});
-
-/*
-|--------------------------------------------------------------------------
-| Distribution System (Driver Delivery)
-|--------------------------------------------------------------------------
-*/
 
 Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
     ->prefix('distribution-tasks')
     ->group(function () {
+        // إنشاء مهمة توزيع
+        Route::post('/', [DistributionTaskController::class, 'store']);
 
-        Route::post('/', [DistributionTaskController::class,'store']);
-        Route::get('/', [DistributionTaskController::class,'index']);
-        Route::get('/{id}', [DistributionTaskController::class,'show']);
-        Route::put('/{id}', [DistributionTaskController::class,'update']);
+//عرض  السائقين
+        Route::get('/drivers', [DistributionTaskController::class, 'drivers']);
 
-        Route::get('/drivers', [DistributionTaskController::class,'drivers']);
-        Route::get('/regions', [RegionController::class,'index']);
+        /* عرض المناطق*/
 
-        Route::get('/driver/{id}', [DistributionTaskController::class,'driverTasks']);
+        Route::get('/regions', [RegionController::class, 'index']);
 
-        Route::get('/today', [DistributionTaskController::class,'todayTasks']);
-        Route::get('/driver/{driverId}/today', [DistributionTaskController::class,'driverTodayTasks']);
+        // (اختياري) تفاصيل مهمة
+        Route::get('/{id}', [DistributionTaskController::class, 'show']);
+
+        // (اختياري) عرض كل المهام
+        Route::get('/', [DistributionTaskController::class, 'index']);
+
+        //تعديل مهمة
+        Route::put('/{id}', [DistributionTaskController::class, 'update']);
+
+        //مهام سائق معين
+        Route::get('/driver/{id}', [DistributionTaskController::class, 'driverTasks']);
+
+
+        /**
+         * عرض المهام اليومية
+         */
+        Route::get('/distribution-tasks/today', [DistributionTaskController::class, 'todayTasks']);
+
+
+
+        /**
+         * عرض المهام اليومية لسائق معين
+         */
+        Route::get('/distribution-tasks/driver/{driverId}/today',
+            [DistributionTaskController::class, 'driverTodayTasks']
+        );
     });
-
 Route::middleware(['auth:sanctum', 'role:driver|admin|super_admin'])->group(function () {
 
-    Route::get('/my-tasks/today', [DistributionTaskController::class,'myTodayTask']);
-    Route::post('/my-tasks/{id}/start', [DistributionTaskController::class,'startTask']);
-    Route::post('/my-tasks/{taskId}/store/{storeId}/visit', [DistributionTaskController::class,'visitStore']);
-    Route::post('/my-tasks/{id}/complete', [DistributionTaskController::class,'completeTask']);
-    Route::get('/my-tasks/daily', [DistributionTaskController::class,'myDailyTasks']);
+    // عرض المهمة الحالية
+    Route::get('/my-tasks/today', [DistributionTaskController::class, 'myTodayTask']);
 
-    Route::post('/scan-store', [StoreController::class,'scanStore']);
+    // بدء المهمة
+    Route::post('/my-tasks/{id}/start', [DistributionTaskController::class, 'startTask']);
+
+    // زيارة محل
+    Route::post('/my-tasks/{taskId}/store/{storeId}/visit',
+        [DistributionTaskController::class, 'visitStore']
+    );
+
+    // إنهاء المهمة
+    Route::post('/my-tasks/{id}/complete',
+        [DistributionTaskController::class, 'completeTask']
+    );
+    //عرض المهام اليومية من قبل  السائق
+    Route::get('/my-tasks/daily', [DistributionTaskController::class, 'myDailyTasks']);
 });
-
-/*
-|--------------------------------------------------------------------------
-| Sales Flow (Driver POS)
-|--------------------------------------------------------------------------
-*/
-
 Route::middleware(['auth:sanctum', 'role:driver'])->group(function () {
 
-    Route::post('/sales', [SaleController::class,'createSale']);
-    Route::post('/sales/{saleId}/items', [SaleController::class,'addItems']);
-    Route::post('/sales/{saleId}/confirm', [InvoiceController::class,'confirmSale']);
+    // 🔹 1. قراءة الباركود
+    Route::post('/scan-store', [StoreController::class, 'scanStore']);
+
+    // 🔹 2. إنشاء عملية بيع (draft)
+    Route::post('/sales', [SaleController::class, 'createSale']);
+
+    // 🔹 3. إضافة منتجات للفاتورة
+    Route::post('/sales/{saleId}/items', [SaleController::class, 'addItems']);
+
+    // 🔹 4. تأكيد الفاتورة
+    Route::post('/sales/{saleId}/confirm', [InvoiceController::class, 'confirmSale']);
+
 });

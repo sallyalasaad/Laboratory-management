@@ -18,6 +18,9 @@ return new class extends Migration
                 ->constrained('sales')
                 ->cascadeOnDelete();
 
+            $table->foreignId('user_id')->constrained(); // السائق (اختياري لكن مهم)
+            $table->foreignId('store_id')->constrained(); // اختياري
+
             $table->decimal('total_amount', 10, 2)->default(0);
             $table->date('date')->nullable();
 

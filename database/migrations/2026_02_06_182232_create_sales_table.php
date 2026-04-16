@@ -19,9 +19,10 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             $table->foreignId('distribution_task_id')
+
                 ->constrained('distribution_tasks')
                 ->cascadeOnDelete();
-
+            $table->foreignId('user_id')->constrained();
             $table->date('date');
             $table->decimal('total_amount', 10, 2)->default(0);
 
