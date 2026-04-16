@@ -1,31 +1,18 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Illuminate\Http\Request;
-
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\RegionController;
-
-use App\Http\Controllers\RawMaterialTaskController;
-use App\Http\Controllers\ProductionOrderController;
-use App\Http\Controllers\ProductionStageController;
-
 use App\Http\Controllers\FinishedProductBatchController;
-use App\Http\Controllers\FinishedProductTaskController;
-
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\FinishedProductTaskController;
+use App\Http\Controllers\FinishedProductWarehouseController;
+use App\Http\Controllers\ProductionStageController;
+use App\Http\Controllers\RawMaterialTaskController;
+use App\Http\Controllers\RegionController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\StoreController;
-
-use App\Http\Controllers\DistributionTaskController;
-
-/*
-|--------------------------------------------------------------------------
-| Authentication
-|--------------------------------------------------------------------------
-*/
-
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ProductionOrderController;
 // تسجيل الدخول
 Route::post('/login', [AuthController::class,'login']);
 Route::post('/password/forgot', [AuthController::class,'sendResetPasswordOtp']);
@@ -190,6 +177,13 @@ Route::middleware('role:production_employee|admin|super_admin')
     // Warehouse keeper confirms sending
     Route::middleware(['role:product_storekeeper|admin|super_admin'])->post('/finished-product-tasks/{id}/confirm-send', [FinishedProductTaskController::class, 'confirmSend']);
 //});
+
+
+
+
+    use App\Http\Controllers\DistributionTaskController;
+
+
 
 
 
