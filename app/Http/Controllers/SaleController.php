@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Sale;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SaleController extends Controller
 {
@@ -33,46 +34,93 @@ class SaleController extends Controller
     {
         $request->validate([
             'items' => 'required|array',
-            'items.*.batch_id' => 'required|exists:finished_product_batches,id',
-            'items.*.quantity' => 'required|numeric|min:0',
+            'items.*.car_stock_item_id' => 'required|exists:car_stock_items,id',
+            'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.price' => 'required|numeric|min:0',
         ]);
 
         $sale = Sale::findOrFail($saleId);
+        $user = auth()->user();
 
-        $total = $sale->total_amount;
-
-        foreach ($request->items as $item) {
-
-            $batch = \App\Models\FinishedProductBatch::findOrFail($item['batch_id']);
-
-            // ❗ تحقق من توفر الكمية
-            if ($batch->quantity < $item['quantity']) {
-                return response()->json([
-                    'message' => 'Not enough stock in batch ' . $batch->batch_number
-                ], 400);
-            }
-
-            // 🔹 إضافة للفاتورة
-            $sale->batches()->attach($item['batch_id'], [
-                'quantity' => $item['quantity'],
-                'price' => $item['price']
-            ]);
-
-            // 🔹 خصم من المخزون
-            $batch->decrement('quantity', $item['quantity']);
-
-            // 🔹 حساب المجموع
-            $total += $item['quantity'] * $item['price'];
+        // ❌ منع التعديل بعد التأكيد
+        if ($sale->status === 'confirmed') {
+            return response()->json([
+                'message' => 'Cannot modify confirmed sale'
+            ], 400);
         }
 
-        $sale->update(['total_amount' => $total]);
+        DB::beginTransaction();
 
-        return response()->json([
-            'total' => $total
-        ]);
+        try {
+
+            $total = $sale->total_amount;
+
+            foreach ($request->items as $item) {
+
+                // 🔒 lock لمنع race condition
+                $stockItem = \App\Models\CarStockItem::where('id', $item['car_stock_item_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                // ❗ تأكد أن العنصر يخص السائق نفسه
+                if ($stockItem->carStock->user_id != $user->id) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => 'Unauthorized stock item'
+                    ], 403);
+                }
+
+                // ❗ تحقق الكمية
+                if ($stockItem->remaining_quantity < $item['quantity']) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => 'Not enough stock in car'
+                    ], 400);
+                }
+
+                // 🔻 خصم من مخزون السيارة
+                $stockItem->decrement('remaining_quantity', $item['quantity']);
+
+                // 🔍 منع التكرار (merge)
+                $existingItem = \App\Models\SaleItem::where('sale_id', $sale->id)
+                    ->where('car_stock_item_id', $stockItem->id)
+                    ->first();
+
+                if ($existingItem) {
+                    $existingItem->increment('quantity', $item['quantity']);
+                } else {
+                    \App\Models\SaleItem::create([
+                        'sale_id' => $sale->id,
+                        'car_stock_item_id' => $stockItem->id,
+                        'finished_product_id' => $stockItem->finished_product_id,
+                        'finished_product_batch_id' => $stockItem->finished_product_batch_id,
+                        'quantity' => $item['quantity'],
+                        'price' => $item['price']
+                    ]);
+                }
+
+                // 🔹 حساب الإجمالي
+                $total += $item['quantity'] * $item['price'];
+            }
+
+            $sale->update(['total_amount' => $total]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Items added successfully',
+                'total' => $total
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Error adding items',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-
 
 
     public function receiveStock(Request $request)

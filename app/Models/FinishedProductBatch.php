@@ -37,13 +37,13 @@ class FinishedProductBatch extends Model
         )->withPivot('quantity');
     }
 
-    public function sales()
+    /*public function sales()
     {
         return $this->belongsToMany(
             Sale::class,
             'sale_items'
         )->withPivot('quantity','price');
-    }
+    }*/
 
     public function waste()
     {

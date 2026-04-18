@@ -12,9 +12,8 @@ class InvoiceController extends Controller
     //تأكيد الفاتورة
     public function confirmSale($saleId)
     {
-        $sale = Sale::with(['store','distributionTask','batches'])->findOrFail($saleId);
+        $sale = Sale::with(['store','distributionTask','items'])->findOrFail($saleId);
 
-        // ❗ منع التكرار
         if ($sale->status === 'confirmed') {
             return response()->json([
                 'message' => 'Sale already confirmed'
@@ -23,7 +22,12 @@ class InvoiceController extends Controller
 
         $task = $sale->distributionTask;
 
-        // ❗ تحقق الوقت
+        if ($task->user_id != auth()->id()) {
+            return response()->json([
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
         $now = now();
         $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
         $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
@@ -38,31 +42,29 @@ class InvoiceController extends Controller
 
         try {
 
-            // 🔥 خصم من المخزون
-            foreach ($sale->batches as $batch) {
+            // ❗ منع تكرار الفاتورة
+            $invoice = Invoice::firstOrCreate(
+                ['sale_id' => $sale->id],
+                [
+                    'total_amount' => $sale->total_amount,
+                    'date' => now()
+                ]
+            );
 
-                if ($batch->quantity < $batch->pivot->quantity) {
-                    return response()->json([
-                        'message' => 'Not enough stock in batch ' . $batch->batch_number
-                    ], 400);
-                }
+            $sale->update([
+                'status' => 'confirmed',
+                'confirmed_at' => now()
+            ]);
 
-                $batch->decrement('quantity', $batch->pivot->quantity);
+            // ❗ منع تكرار الزيارة
+            $storePivot = $task->stores()->where('store_id', $sale->store_id)->first();
+
+            if ($storePivot && $storePivot->pivot->visited) {
+                return response()->json([
+                    'message' => 'Store already visited'
+                ], 400);
             }
 
-            // 🔹 إنشاء الفاتورة
-            Invoice::create([
-                'sale_id' => $sale->id,
-                'total_amount' => $sale->total_amount,
-                'date' => now()
-            ]);
-
-            // 🔹 تحديث حالة البيع
-            $sale->update([
-                'status' => 'confirmed'
-            ]);
-
-            // 🔹 تسجيل الزيارة
             $task->stores()->updateExistingPivot($sale->store_id, [
                 'visited' => true,
                 'visited_at' => now(),

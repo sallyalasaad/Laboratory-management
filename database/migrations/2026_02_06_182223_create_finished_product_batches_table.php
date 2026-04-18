@@ -16,6 +16,7 @@ return new class extends Migration
         $table->foreignId('production_order_id')->constrained()->cascadeOnDelete();
         $table->string('batch_number');
         $table->decimal('quantity',10,2);
+        $table->decimal('remaining_quantity', 10, 2);
         $table->date('production_date')->nullable();
         $table->date('expiry_date')->nullable();
         $table->timestamps();

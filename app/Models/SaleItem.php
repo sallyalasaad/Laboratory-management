@@ -14,4 +14,10 @@ class SaleItem extends Model
         'quantity',
         'price'
     ];
+
+
+    public function carStockItem()
+    {
+        return $this->belongsTo(CarStockItem::class);
+    }
 }

@@ -9,7 +9,7 @@ class FinishedProductTask extends Model
 {
     use HasFactory;
         protected $fillable = [
-        'admin_id',
+        //'admin_id',
         'user_id',
         'driver_id',
         'route',

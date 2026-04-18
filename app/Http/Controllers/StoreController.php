@@ -27,7 +27,7 @@ class StoreController extends Controller
         }
 
         $task = DistributionTask::where('user_id', $user->id)
-            ->whereDate('date', now())
+            ->whereDate('date', now()->toDateString())
             ->whereIn('status', ['in_progress'])
             ->first();
 
@@ -35,25 +35,18 @@ class StoreController extends Controller
             return response()->json(['message' => 'No active task'], 400);
         }
 
-        $exists = $task->stores()->where('store_id', $store->id)->exists();
+        $exists = $task->stores()
+            ->where('store_id', $store->id)
+            ->exists();
 
         if (!$exists) {
             return response()->json(['message' => 'Store not in your task'], 400);
         }
 
-        // 🔥 إنشاء sale تلقائي إذا ما موجود
-        $sale = \App\Models\Sale::firstOrCreate([
-            'store_id' => $store->id,
-            'distribution_task_id' => $task->id,
-        ], [
-            'total_amount' => 0,
-            'status' => 'pending'
-        ]);
-
         return response()->json([
-            'store' => $store,
-            'task_id' => $task->id,
-            'sale_id' => $sale->id
+            'store_id' => $store->id,
+            'store_name' => $store->name,
+            'task_id' => $task->id
         ]);
     }
 }

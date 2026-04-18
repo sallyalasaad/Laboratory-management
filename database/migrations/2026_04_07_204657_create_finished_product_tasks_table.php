@@ -13,6 +13,17 @@ return new class extends Migration
     {
         Schema::create('finished_product_tasks', function (Blueprint $table) {
             $table->id();
+
+            $table->foreignId('admin_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('driver_id')->constrained('users')->cascadeOnDelete();
+
+            $table->string('route')->nullable();
+            $table->string('status')->default('pending');
+
+            $table->json('details')->nullable();
+            $table->timestamp('sent_at')->nullable();
+
             $table->timestamps();
         });
     }

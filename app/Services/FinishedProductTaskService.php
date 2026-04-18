@@ -23,7 +23,6 @@ class FinishedProductTaskService
         }
 
         $task = FinishedProductTask::create([
-            'admin_id' => $adminId,
             'user_id' => $userId,
             'driver_id' => $driverId,
             'route' => 'send_to_market',
