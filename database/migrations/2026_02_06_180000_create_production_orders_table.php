@@ -20,6 +20,7 @@ return new class extends Migration
             $table->enum('status', [
                 'pending', 'accepted', 'rejected', 'materials_received', 'in_progress', 'paused', 'completed'
             ])->default('pending');
+            $table->text('note')->nullable();
             $table->timestamp('start_date')->nullable();
             $table->timestamp('end_date')->nullable();
             $table->timestamps();

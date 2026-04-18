@@ -58,15 +58,17 @@ class ProductionOrderService
     public function getCurrentTasks()
     {
         $orders = $this->dao->getCurrentOrders()
-            ->whereIn('status', ['in_progress']); // أو started حسب نظامك
+            ->whereIn('status', ['in_progress']);
 
         return $orders->map(function ($order) {
             return [
                 'task_number' => $order->order_number,
                 'status' => $order->status,
-                'product_name' => $order->product->name,
-                'product_size' => $order->product->size,
-                'product_unit' => $order->product->unit,
+
+                'product_name' => $order->product?->name,
+                'product_size' => $order->product?->size,
+                'product_unit' => $order->product?->unit,
+
                 'quantity' => $order->quantity,
                 'date' => $order->created_at->format('Y-m-d'),
 
@@ -77,36 +79,30 @@ class ProductionOrderService
                     ];
                 }),
 
-                'notes' => $order->notes->map(function ($note) {
-                    return [
-                        'message' => $note->message,
-                        'from' => $note->fromUser?->name,
-                        'is_read' => $note->is_read,
-                        'date' => $note->created_at->format('Y-m-d H:i')
-                    ];
-                }),
-
-                'unread_notes' => $order->notes->where('is_read', false)->count()
+                // ✅ هذا اللي بدك ياه
+                'note' => $order->note,
             ];
         });
+    }
 
-}
     public function getOrdersHistory()
     {
         $orders = $this->dao->getOrdersHistory();
 
         return $orders->map(function ($order) {
-            return [
-                'task_number' => $order->order_number,
-                'product_name' => $order->product->name,
-                'product_size' => $order->product->size,  // أضف هذا
-                'product_unit' => $order->product->unit,  // أضف هذا
-                'quantity' => $order->quantity,
-                'status' => $order->status,
-                'date' => $order->created_at->format('Y-m-d'),
-                'notes_count' => $order->notes->count()
-            ];
-        });
+        return [
+            'task_number' => $order->order_number,
+            'product_name' => $order->product?->name,
+            'product_size' => $order->product?->size,
+            'product_unit' => $order->product?->unit,
+            'quantity' => $order->quantity,
+            'status' => $order->status,
+            'date' => $order->created_at->format('Y-m-d'),
+
+            // ✅ عرض الملاحظة نفسها
+            'note' => $order->note,
+        ];
+    });
     }
     public function getIncomingTasks()
     {
