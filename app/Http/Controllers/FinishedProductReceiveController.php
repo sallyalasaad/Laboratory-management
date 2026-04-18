@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CarStock;
+use App\Models\CarStockItem;
 use App\Models\FinishedProductTask;
 use Illuminate\Http\Request;
 use App\Services\FinishedProductReceiveService;
@@ -30,21 +32,19 @@ class FinishedProductReceiveController extends Controller
 
         try {
 
-            // 1. جلب أو إنشاء CarStock
-            $carStock = CarStock::where('user_id', $task->driver_id)
-                ->where('status', 'active')
-                ->first();
-
-            if (!$carStock) {
-                $carStock = CarStock::create([
+            // 1) جلب أو إنشاء مخزون السيارة
+            $carStock = CarStock::firstOrCreate(
+                [
                     'user_id' => $task->driver_id,
-                    'distribution_task_id' => null,
                     'status' => 'active'
-                ]);
-            }
+                ],
+                [
+                    'distribution_task_id' => null
+                ]
+            );
 
-            // 2. إدخال المنتجات
-            foreach ($task->details as $item) {
+            // 2) إضافة المنتجات من allocations
+            foreach ($task->details['allocations'] as $item) {
 
                 $existing = CarStockItem::where('car_stock_id', $carStock->id)
                     ->where('finished_product_id', $item['finished_product_id'])
@@ -65,7 +65,7 @@ class FinishedProductReceiveController extends Controller
                 }
             }
 
-            // 3. تحديث المهمة
+            // 3) تحديث الحالة
             $task->update([
                 'status' => 'received'
             ]);

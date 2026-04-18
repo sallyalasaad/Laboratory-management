@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FinishedProductReceiveController;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\AuthController;
@@ -208,6 +209,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Warehouse keeper confirms sending
     Route::middleware(['role:product_storekeeper|admin|super_admin'])
         ->post('/finished-product-tasks/{id}/confirm-send', [FinishedProductTaskController::class, 'confirmSend']);
+    // Warehouse keeper confirms receiving
+    Route::middleware(['role:driver|admin|super_admin'])
+        ->post('/finished-product-tasks/{id}/receive', [FinishedProductReceiveController::class, 'confirmReceive']);
+
 });
 
 //////////////////////////////////////////////////////////

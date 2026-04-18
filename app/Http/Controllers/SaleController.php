@@ -16,13 +16,15 @@ class SaleController extends Controller
             'task_id' => 'required|exists:distribution_tasks,id',
         ]);
 
+        $user = auth()->user();
+
         $sale = Sale::create([
             'store_id' => $request->store_id,
             'distribution_task_id' => $request->task_id,
+            'user_id' => $user->id, // ✅ الحل هنا
             'date' => now(),
             'total_amount' => 0
         ]);
-
         return response()->json([
             'sale_id' => $sale->id
         ]);
@@ -92,7 +94,6 @@ class SaleController extends Controller
                     \App\Models\SaleItem::create([
                         'sale_id' => $sale->id,
                         'car_stock_item_id' => $stockItem->id,
-                        'finished_product_id' => $stockItem->finished_product_id,
                         'finished_product_batch_id' => $stockItem->finished_product_batch_id,
                         'quantity' => $item['quantity'],
                         'price' => $item['price']

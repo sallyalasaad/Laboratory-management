@@ -47,7 +47,8 @@ class InvoiceController extends Controller
                 ['sale_id' => $sale->id],
                 [
                     'total_amount' => $sale->total_amount,
-                    'date' => now()
+                    'date' => now(),
+                    'user_id' => auth()->id()  // إضافة هذا السطر
                 ]
             );
 
