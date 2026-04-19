@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Sale;
+use App\Models\DistributionTask;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SaleController extends Controller
 {
-    //إنشاء بيع (مسودة بدون تأكيد)
     public function createSale(Request $request)
     {
         $request->validate([
@@ -18,17 +18,49 @@ class SaleController extends Controller
 
         $user = auth()->user();
 
+        $task = DistributionTask::findOrFail($request->task_id);
+
+        // 🔵 Retail → لازم زيارة مسبقة
+        if ($task->type === 'retail') {
+
+            $storePivot = $task->stores()
+                ->where('store_id', $request->store_id)
+                ->first();
+
+            if (!$storePivot || !$storePivot->pivot->visited) {
+                return response()->json([
+                    'message' => 'You must scan store first'
+                ], 400);
+            }
+        }
+
+        // 🔴 Wholesale → لازم scan قبل البيع
+        if ($task->type === 'wholesale') {
+
+            $storePivot = $task->stores()
+                ->where('store_id', $request->store_id)
+                ->first();
+
+            if (!$storePivot || !$storePivot->pivot->scanned_at) {
+                return response()->json([
+                    'message' => 'You must scan store first'
+                ], 400);
+            }
+        }
+
         $sale = Sale::create([
             'store_id' => $request->store_id,
-            'distribution_task_id' => $request->task_id,
-            'user_id' => $user->id, // ✅ الحل هنا
+            'distribution_task_id' => $task->id,
+            'user_id' => $user->id,
             'date' => now(),
             'total_amount' => 0
         ]);
+
         return response()->json([
             'sale_id' => $sale->id
         ]);
     }
+
 
 
     //إضافة منتجات على البيع
@@ -44,7 +76,6 @@ class SaleController extends Controller
         $sale = Sale::findOrFail($saleId);
         $user = auth()->user();
 
-        // ❌ منع التعديل بعد التأكيد
         if ($sale->status === 'confirmed') {
             return response()->json([
                 'message' => 'Cannot modify confirmed sale'
@@ -59,31 +90,22 @@ class SaleController extends Controller
 
             foreach ($request->items as $item) {
 
-                // 🔒 lock لمنع race condition
                 $stockItem = \App\Models\CarStockItem::where('id', $item['car_stock_item_id'])
                     ->lockForUpdate()
                     ->first();
 
-                // ❗ تأكد أن العنصر يخص السائق نفسه
                 if ($stockItem->carStock->user_id != $user->id) {
                     DB::rollBack();
-                    return response()->json([
-                        'message' => 'Unauthorized stock item'
-                    ], 403);
+                    return response()->json(['message' => 'Unauthorized stock item'], 403);
                 }
 
-                // ❗ تحقق الكمية
                 if ($stockItem->remaining_quantity < $item['quantity']) {
                     DB::rollBack();
-                    return response()->json([
-                        'message' => 'Not enough stock in car'
-                    ], 400);
+                    return response()->json(['message' => 'Not enough stock'], 400);
                 }
 
-                // 🔻 خصم من مخزون السيارة
                 $stockItem->decrement('remaining_quantity', $item['quantity']);
 
-                // 🔍 منع التكرار (merge)
                 $existingItem = \App\Models\SaleItem::where('sale_id', $sale->id)
                     ->where('car_stock_item_id', $stockItem->id)
                     ->first();
@@ -100,7 +122,6 @@ class SaleController extends Controller
                     ]);
                 }
 
-                // 🔹 حساب الإجمالي
                 $total += $item['quantity'] * $item['price'];
             }
 
@@ -117,7 +138,7 @@ class SaleController extends Controller
             DB::rollBack();
 
             return response()->json([
-                'message' => 'Error adding items',
+                'message' => 'Error',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -162,5 +183,5 @@ class SaleController extends Controller
         return response()->json([
             'message' => 'تم استلام البضاعة بنجاح'
         ]);
-    }
-}
+
+}}
