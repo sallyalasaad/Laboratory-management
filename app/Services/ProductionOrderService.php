@@ -73,11 +73,12 @@ class ProductionOrderService
                 'date' => $order->created_at->format('Y-m-d'),
 
                 'stages' => $order->stages->map(function ($stage) {
-                    return [
-                        'stage_name' => $stage->stage_name,
-                        'status' => $stage->status
-                    ];
-                }),
+    return [
+        'id' => $stage->id, // ✅ إضافة ID
+        'stage_name' => $stage->stage_name,
+        'status' => $stage->status
+    ];
+}),
 
                 // ✅ هذا اللي بدك ياه
                 'note' => $order->note,
