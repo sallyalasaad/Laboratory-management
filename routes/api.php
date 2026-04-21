@@ -92,7 +92,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/inventory/summary', [RawMaterialTaskController::class, 'inventorySummary']);
 
     // Notes for raw material tasks
-    Route::post('/tasks/raw-materials/notes', [RawMaterialTaskController::class, 'addNote']);
+    Route::middleware([ 'role:raw_storekeeper|product_storekeeper|accountant|production_employee|driver'])->post('/tasks/raw-materials/notes', [RawMaterialTaskController::class, 'addNote']);
 
     Route::middleware(['role:admin|super_admin'])
         ->get('/tasks/raw-materials/notes', [RawMaterialTaskController::class, 'adminListNotes']);
@@ -102,6 +102,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::middleware(['role:admin|super_admin'])
         ->delete('/tasks/raw-materials/{id}/notes/delete-read', [RawMaterialTaskController::class, 'deleteReadNotes']);
+
+        // عرض المواد الأولية المؤكد إرسالها لموظف الإنتاج
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production/confirmed-sent-materials', [RawMaterialTaskController::class, 'listConfirmedSentMaterials']);
+
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->post('/production/tasks/{id}/confirm-receive', [RawMaterialTaskController::class, 'confirmReceiveinp']);
+
+
 });
 
 //////////////////////////////////////////////////////////

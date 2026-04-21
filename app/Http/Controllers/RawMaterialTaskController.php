@@ -143,8 +143,20 @@ class RawMaterialTaskController extends Controller
     {
         $user = Auth::user();
 
-        $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'receive')->firstOrFail();
+    $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'receive')->firstOrFail();
+//$task = RawMaterialTask::find($id);
 
+if (!$task) {
+    return response()->json(['message' => 'Task not found'], 404);
+}
+
+if ($task->user_id != $user->id) {
+    return response()->json(['message' => 'Unauthorized'], 403);
+}
+
+if ($task->route !== 'receive') {
+    return response()->json(['message' => 'Invalid task route'], 400);
+}
         $request->validate([
             'items' => 'required|array',
             'items.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
@@ -267,13 +279,14 @@ class RawMaterialTaskController extends Controller
                     ];
                 }
             }
-       $task->status = 'completed';
-                $task->sent_at = now();
-                $details = $task->details ?? [];
-                $details['sent_allocations'] = $createdAllocations;
-                unset($details['items']);
-                $task->details = $details;
-                $task->save();
+
+            $task->status = 'completed';
+            $task->sent_at = now();
+            $details = $task->details ?? [];
+            $details['sent_allocations'] = $createdAllocations;
+            unset($details['items']);
+            $task->details = $details;
+            $task->save();
         });
     } catch (\Exception $e) {
         return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
@@ -285,31 +298,35 @@ class RawMaterialTaskController extends Controller
     ]);
 }
     // Warehouse adds a note to the task (sent to admin)
-   public function addNote(Request $request)
+ public function addNote(Request $request)
 {
     $user = Auth::user();
 
-    $request->validate([
+    $data = $request->validate([
         'message' => 'required|string'
     ]);
 
-    // جلب الأدمن
-    $admin = User::role('admin')->first();
+    // جلب كل الأدمنز
+    $admins = User::role('admin')->get();
 
-    if (!$admin) {
+    if ($admins->isEmpty()) {
         return response()->json(['message' => 'Admin not found'], 404);
     }
 
-    $note = Note::create([
-        'from_user_id' => $user->id,
-        'to_user_id' => $admin->id,
-        'message' => $request->message,
-        'is_read' => false
-    ]);
+    $notes = [];
+
+    foreach ($admins as $admin) {
+        $notes[] = Note::create([
+            'from_user_id' => $user->id,
+            'to_user_id' => $admin->id,
+            'message' => $data['message'],
+            'is_read' => false
+        ]);
+    }
 
     return response()->json([
-        'message' => 'Note sent to admin',
-        'note' => $note
+        'message' => 'Note sent to admin(s)',
+        'notes' => $notes
     ], 201);
 }
     // Admin lists notes for a task (shows read/unread)
@@ -432,4 +449,57 @@ class RawMaterialTaskController extends Controller
         'task' => $task
     ]);
 }
+
+    // Production employee lists confirmed sent raw materials
+    public function listConfirmedSentMaterials(Request $request)
+    {
+        $user = Auth::user();
+
+        if (!$user->hasRole('production_employee') && !$user->hasRole('admin') && !$user->hasRole('super_admin')) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $tasks = RawMaterialTask::where('route', 'send_to_production')
+            ->whereIn('status', ['completed'])
+            ->with(['user', 'admin'])
+            ->orderBy('sent_at', 'desc')
+            ->get();
+
+        $formatted = $tasks->map(function ($task) {
+            $details = $task->details ?? [];
+            $sentAllocations = $details['sent_allocations'] ?? [];
+
+            // Load batch details for each allocation
+            $allocationsWithDetails = [];
+            foreach ($sentAllocations as $alloc) {
+                $batch = RawMaterialBatch::with('rawMaterial')->find($alloc['batch_id']);
+                if ($batch) {
+                    $allocationsWithDetails[] = [
+                        'raw_material_id' => $alloc['raw_material_id'],
+                        'raw_material_name' => $batch->rawMaterial->name ?? 'Unknown',
+                        'batch_id' => $alloc['batch_id'],
+                        'batch_number' => $batch->batch_number,
+                        'quantity' => $alloc['quantity'],
+                        'expiry_date' => $batch->expiry_date,
+                        'received_at' => $batch->received_at,
+                    ];
+                }
+            }
+
+            return [
+                'task_id' => $task->id,
+                'sent_at' => $task->sent_at,
+                'status' => $task->status,
+                'warehouse_keeper' => $task->user->name ?? 'Unknown',
+                'admin' => $task->admin->name ?? 'Unknown',
+                'production_received_at' => $details['production_received_at'] ?? null,
+                'production_received_by' => $details['production_received_by'] ?? null,
+                'allocations' => $allocationsWithDetails,
+            ];
+        });
+
+        return response()->json(['confirmed_sent_materials' => $formatted]);
+    }
+
 }
+
