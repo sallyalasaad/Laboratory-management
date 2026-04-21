@@ -9,7 +9,7 @@ class Sale extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['store_id','distribution_task_id','date','total_amount',    'status',
+    protected $fillable = ['store_id','user_id','distribution_task_id','date','total_amount','status',
     ];
 
     public function distributionTask()

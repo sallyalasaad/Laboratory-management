@@ -9,7 +9,7 @@ use App\Models\CarStockItem;
 use Illuminate\Support\Facades\DB;
 
 class FinishedProductReceiveService
-{
+{/*
     public function confirmReceive($taskId)
     {
         $task = FinishedProductTask::findOrFail($taskId);
@@ -85,5 +85,5 @@ class FinishedProductReceiveService
         });
 
         return true;
-    }
+    }*/
 }

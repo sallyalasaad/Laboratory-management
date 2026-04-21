@@ -68,28 +68,34 @@ class FinishedProductTaskService
     {
         $task = FinishedProductTask::findOrFail($taskId);
 
-        if ($task->status === 'completed') {
-            throw new \Exception('Task already completed');
+        if ($task->status !== 'pending') {
+            throw new \Exception('Task already processed');
         }
 
         $items = $task->details['items'] ?? [];
         $createdAllocations = [];
 
         DB::transaction(function () use ($items, $task, &$createdAllocations) {
+
             foreach ($items as $item) {
+
                 $finishedProductId = $item['finished_product_id'];
                 $qty = $item['quantity'];
 
                 $allocs = $this->allocateFifo($finishedProductId, $qty);
 
                 $allocatedQty = array_sum(array_map(fn($a) => $a['quantity'], $allocs));
+
                 if ($allocatedQty < $qty) {
-                    throw new \Exception("Insufficient inventory for finished product id {$finishedProductId}: requested {$qty}, allocated {$allocatedQty}");
+                    throw new \Exception("Insufficient stock for product {$finishedProductId}");
                 }
 
                 foreach ($allocs as $alloc) {
+
                     $batch = FinishedProductBatch::find($alloc['batch_id']);
-                    $batch->remaining_quantity = max(0, ($batch->remaining_quantity ?? 0) - $alloc['quantity']);
+
+                    // ✅ خصم من المستودع (مرة واحدة فقط)
+                    $batch->remaining_quantity -= $alloc['quantity'];
                     $batch->save();
 
                     $createdAllocations[] = [
@@ -100,13 +106,14 @@ class FinishedProductTaskService
                 }
             }
 
-            $task->status = 'completed';
-            $task->sent_at = now();
-            $details = $task->details ?? [];
-            $details['sent_allocations'] = $createdAllocations;
-            unset($details['items']);
-            $task->details = $details;
-            $task->save();
+            // ✅ تحديث المهمة
+            $task->update([
+                'status' => 'sent',
+                'sent_at' => now(),
+                'details' => [
+                    'allocations' => $createdAllocations
+                ]
+            ]);
         });
 
         return $createdAllocations;

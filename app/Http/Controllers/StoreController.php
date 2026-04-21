@@ -5,13 +5,25 @@ namespace App\Http\Controllers;
 use App\Models\DistributionTask;
 use App\Models\Store;
 use Illuminate\Http\Request;
-use App\Models\Sale;
-use App\Models\FinishedProductBatch;
-use Illuminate\Support\Facades\DB;
+
 class StoreController extends Controller
 {
-    //قراءة الباركود (تجيب المحل + تتحقق من المهمة)
+    // 🔥 دالة موحدة لتسجيل الزيارة
+    private function markVisited($task, $storeId)
+    {
+        $storePivot = $task->stores()
+            ->where('store_id', $storeId)
+            ->first();
 
+        if ($storePivot && !$storePivot->pivot->visited) {
+            $task->stores()->updateExistingPivot($storeId, [
+                'visited' => true,
+                'visited_at' => now(),
+            ]);
+        }
+    }
+
+    // 📌 scan (يستخدم فقط بالمفرق)
     public function scanStore(Request $request)
     {
         $request->validate([
@@ -35,18 +47,32 @@ class StoreController extends Controller
             return response()->json(['message' => 'No active task'], 400);
         }
 
-        $exists = $task->stores()
+        $storePivot = $task->stores()
             ->where('store_id', $store->id)
-            ->exists();
+            ->first();
 
-        if (!$exists) {
+        if (!$storePivot) {
             return response()->json(['message' => 'Store not in your task'], 400);
+        }
+
+        // 🔵 Retail → تسجيل زيارة مباشرة
+        if ($task->type === 'retail') {
+            $this->markVisited($task, $store->id);
+        }
+
+        // 🔴 Wholesale → تسجيل scan فقط
+        if ($task->type === 'wholesale') {
+            $task->stores()->updateExistingPivot($store->id, [
+                'scanned_at' => now()
+            ]);
         }
 
         return response()->json([
             'store_id' => $store->id,
             'store_name' => $store->name,
-            'task_id' => $task->id
+            'task_id' => $task->id,
+            'task_type' => $task->type,
+            'scanned' => true
         ]);
     }
 }

@@ -14,6 +14,7 @@ class ProductionOrder extends Model
         'quantity',
         'status',
         'start_date',
+        'note',
         'end_date'
     ];
 
