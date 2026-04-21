@@ -12,17 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('production_orders', function (Blueprint $table) {
-            //
+            $table->text('note')->nullable()->after('status');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('production_orders', function (Blueprint $table) {
-            //
+            $table->dropColumn('note');
         });
     }
 };
