@@ -186,6 +186,24 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:production_employee')
         ->post('/production-stages/{stageId}/complete', [ProductionStageController::class, 'completeStage']);
 
+    //إيقاف مرحلة
+
+
+
+    Route::middleware('role:production_employee')->
+    post('/stages/{stageId}/pause', [ProductionStageController::class, 'pauseStage']);
+
+    //استئناف مرحلة
+
+
+    Route::middleware('role:production_employee')->
+    post('/stages/{stageId}/resume', [ProductionStageController::class, 'resumeStage']);
+
+
+
+
+
+
     // إنشاء Batch للمنتج النهائي
     Route::middleware('role:production_employee')
         ->post('/finished-product-batches', [FinishedProductBatchController::class, 'create']);

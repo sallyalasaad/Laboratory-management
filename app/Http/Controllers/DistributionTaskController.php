@@ -148,6 +148,18 @@ class DistributionTaskController extends Controller
     {
         $task = DistributionTask::with('stores')->findOrFail($id);
 
+        $now = now();
+
+        $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
+        $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
+
+        // 🔴 منع التعديل إذا المهمة بدأت أو انتهت
+        if ($task->status === 'in_progress' || $now->gte($start)) {
+            return response()->json([
+                'message' => 'لا يمكن تعديل المهمة بعد بدء وقتها'
+            ], 403);
+        }
+
         $data = $request->validate([
             'user_id'    => 'sometimes|exists:users,id',
             'region_id'  => 'sometimes|exists:regions,id',
@@ -181,18 +193,18 @@ class DistributionTaskController extends Controller
 
             $userId = $data['user_id'] ?? $task->user_id;
             $date   = $data['date'] ?? $task->date;
-            $start  = $data['start_time'] ?? $task->start_time;
-            $end    = $data['end_time'] ?? $task->end_time;
+            $startT = $data['start_time'] ?? $task->start_time;
+            $endT   = $data['end_time'] ?? $task->end_time;
 
             $exists = DistributionTask::where('user_id', $userId)
                 ->where('id', '!=', $task->id)
                 ->whereDate('date', $date)
-                ->where(function ($q) use ($start, $end) {
-                    $q->whereBetween('start_time', [$start, $end])
-                        ->orWhereBetween('end_time', [$start, $end])
-                        ->orWhere(function ($q2) use ($start, $end) {
-                            $q2->where('start_time', '<=', $start)
-                                ->where('end_time', '>=', $end);
+                ->where(function ($q) use ($startT, $endT) {
+                    $q->whereBetween('start_time', [$startT, $endT])
+                        ->orWhereBetween('end_time', [$startT, $endT])
+                        ->orWhere(function ($q2) use ($startT, $endT) {
+                            $q2->where('start_time', '<=', $startT)
+                                ->where('end_time', '>=', $endT);
                         });
                 })
                 ->exists();
@@ -239,7 +251,6 @@ class DistributionTaskController extends Controller
             ], 500);
         }
     }
-
 
     /**
      * مهام سائق معين
@@ -332,49 +343,56 @@ class DistributionTaskController extends Controller
 
     /////////////////////////////////////////////////////////
     ///عرض المهمة الحالية للسائق
-    public function myTodayTask(Request $request)
+    public function myTodayTask()
     {
-        $driverId = $request->user()->id;
+        $user = auth()->user();
 
-        $task = DistributionTask::with(['region', 'stores'])
-            ->where('user_id', $driverId)
+        $tasks = DistributionTask::with(['region', 'stores'])
+            ->where('user_id', $user->id)
             ->whereDate('date', now()->toDateString())
-            ->whereIn('status', ['pending', 'in_progress', 'ready_to_complete'])
             ->orderBy('start_time')
-            ->first();
+            ->get();
 
-        if (!$task) {
-            return response()->json(['message' => 'No tasks today']);
+        $now = now();
+        $currentTask = null;
+
+        foreach ($tasks as $task) {
+
+            $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
+            $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
+
+            // 🔴 انتهى الوقت وما اكتملت → Failed
+            if ($now->gt($end) && $task->status !== 'completed') {
+                $task->update(['status' => 'failed']);
+                continue;
+            }
+
+            // 🟡 داخل الوقت → In Progress
+            if ($now->between($start, $end) && $task->status === 'pending') {
+                $task->update(['status' => 'in_progress']);
+            }
+
+            // 🟢 المهمة الحالية
+            if (
+                $now->between($start, $end) &&
+                in_array($task->status, ['pending', 'in_progress'])
+            ) {
+                $currentTask = [
+                    'id' => $task->id,
+                    'region' => $task->region->name,
+                    'time' => $task->start_time . ' - ' . $task->end_time,
+                    'status' => $task->status,
+                    'stores_total' => $task->stores->count(),
+                    'visited' => $task->stores->where('pivot.visited', true)->count(),
+                ];
+
+                break; // أهم نقطة: أول مهمة حالية فقط
+            }
         }
 
-        $total = $task->stores->count();
-
-        $visited = $task->stores
-            ->where('pivot.visited', true)
-            ->count();
-
         return response()->json([
-            'id' => $task->id,
-            'status' => $task->status,
-            'region' => $task->region->name,
-            'time' => $task->start_time . ' - ' . $task->end_time,
-
-            'progress' => [
-                'total' => $total,
-                'visited' => $visited,
-                'remaining' => $total - $visited,
-                'percentage' => $total ? round(($visited / $total) * 100) : 0,
-            ],
-
-            'stores' => $task->stores->map(function ($store) {
-                return [
-                    'id' => $store->id,
-                    'name' => $store->name,
-                    'visited' => $store->pivot->visited,
-                    'lat' => $store->lat,       // خط العرض
-                    'lng' => $store->lng        // خط الطول
-                ];
-            })
+            'current_task' => $currentTask,
+            'message' => $currentTask ? null : 'No current task'
         ]);
     }
 
@@ -523,21 +541,12 @@ class DistributionTaskController extends Controller
     {
         $user = auth()->user();
 
-        $todayTasks = DistributionTask::with(['region', 'stores'])
+        $tasks = DistributionTask::with(['region', 'stores'])
             ->where('user_id', $user->id)
             ->whereDate('date', now()->toDateString())
+            ->orderBy('start_time')
             ->get()
             ->map(function ($task) {
-
-                $stores = $task->stores->map(function ($store) {
-                    return [
-                        'id' => $store->id,
-                        'name' => $store->name,
-                        'lat' => $store->lat,
-                        'lng' => $store->lng,
-                        'visited' => $store->pivot->visited,
-                    ];
-                });
 
                 return [
                     'id' => $task->id,
@@ -545,22 +554,12 @@ class DistributionTaskController extends Controller
                     'time' => $task->start_time . ' - ' . $task->end_time,
                     'status' => $task->status,
                     'region' => $task->region->name,
-                    'stores_count' => $stores->count(),
-                    'visited_count' => $stores->where('visited', true)->count(),
-                    'stores' => $stores
+                    'stores_count' => $task->stores->count(),
+                    'visited_count' => $task->stores->where('pivot.visited', true)->count(),
                 ];
             });
 
-        $currentTask = DistributionTask::where('user_id', $user->id)
-            ->whereDate('date', now()->toDateString())
-            ->whereTime('start_time', '<=', now())
-            ->whereTime('end_time', '>=', now())
-            ->first();
-
-        return response()->json([
-            'current_task' => $currentTask,
-            'daily_tasks' => $todayTasks
-        ]);
+        return response()->json($tasks);
     }
 
 

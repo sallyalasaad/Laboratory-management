@@ -54,70 +54,71 @@ class ProductionOrderService
     {
         $order = $this->dao->findById($orderId);
         return $this->dao->updateStatus($order, $status);
-    }
-    public function getCurrentTasks()
+    }public function getCurrentTasks()
+{
+    $orders = $this->dao->getCurrentOrders()
+        ->whereIn('status', [
+            'materials_received',
+            'in_progress',
+            'paused'
+        ]);
+
+    return $orders->map(function ($order) {
+        return [
+            'task_number' => $order->order_number,
+            'status' => $order->status,
+
+            'product_name' => $order->product?->name,
+            'product_size' => $order->product?->size,
+            'product_unit' => $order->product?->unit,
+
+            'quantity' => $order->quantity,
+            'date' => $order->created_at->format('Y-m-d'),
+
+            'stages' => $order->stages->map(function ($stage) {
+                return [
+                    'id' => $stage->id,
+                    'stage_name' => $stage->stage_name,
+                    'status' => $stage->status
+                ];
+            }),
+
+            'note' => $order->note,
+        ];
+    });
+}
+    public function getOrdersHistory()
     {
-        $orders = $this->dao->getCurrentOrders()
-            ->whereIn('status', ['in_progress']);
+        $orders = $this->dao->listAll();
 
         return $orders->map(function ($order) {
             return [
                 'task_number' => $order->order_number,
-                'status' => $order->status,
-
                 'product_name' => $order->product?->name,
                 'product_size' => $order->product?->size,
                 'product_unit' => $order->product?->unit,
-
                 'quantity' => $order->quantity,
+                'status' => $order->status,
                 'date' => $order->created_at->format('Y-m-d'),
-
-                'stages' => $order->stages->map(function ($stage) {
-    return [
-        'id' => $stage->id, // ✅ إضافة ID
-        'stage_name' => $stage->stage_name,
-        'status' => $stage->status
-    ];
-}),
-
-                // ✅ هذا اللي بدك ياه
                 'note' => $order->note,
             ];
         });
     }
-
-    public function getOrdersHistory()
-    {
-        $orders = $this->dao->getOrdersHistory();
-
-        return $orders->map(function ($order) {
-        return [
-            'task_number' => $order->order_number,
-            'product_name' => $order->product?->name,
-            'product_size' => $order->product?->size,
-            'product_unit' => $order->product?->unit,
-            'quantity' => $order->quantity,
-            'status' => $order->status,
-            'date' => $order->created_at->format('Y-m-d'),
-
-            // ✅ عرض الملاحظة نفسها
-            'note' => $order->note,
-        ];
-    });
-    }
     public function getIncomingTasks()
     {
-        $orders = $this->dao->getIncomingOrders();
+        $orders = $this->dao->getIncomingOrders()
+            ->whereIn('status', ['pending','accepted']);
 
         return $orders->map(function ($order) {
             return [
                 'task_number' => $order->order_number,
-                'product_name' => $order->product->name,
-                'product_size' => $order->product->size,  // أضف هذا
-                'product_unit' => $order->product->unit,  // أضف هذا
+                'product_name' => $order->product?->name,
+                'product_size' => $order->product?->size,
+                'product_unit' => $order->product?->unit,
                 'quantity' => $order->quantity,
                 'date' => $order->created_at->format('Y-m-d'),
-                'status' => $order->status
+                'status' => $order->status,
+                'note' => $order->note,
             ];
         });
     }
