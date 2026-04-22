@@ -15,9 +15,7 @@ return new class extends Migration
 
         $table->foreignId('user_id')->constrained()->cascadeOnDelete();
         $table->foreignId('region_id')->constrained()->cascadeOnDelete();
-        $table->enum('type', ['retail', 'wholesale'])->default('retail');
         $table->date('date');
-
         $table->time('start_time');
         $table->time('end_time');
 

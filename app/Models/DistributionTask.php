@@ -13,7 +13,6 @@ class DistributionTask extends Model
         'user_id',
         'region_id',
         'date',
-        'type',
         'start_time',
         'end_time',
         'status'

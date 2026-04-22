@@ -19,7 +19,7 @@ return new class extends Migration
 
            $table->string('name');
            $table->string('barcode')->unique();
-
+           $table->enum('type', ['retail', 'wholesale'])->default('retail');
            $table->decimal('lat', 10, 7);
            $table->decimal('lng', 10, 7);
 
