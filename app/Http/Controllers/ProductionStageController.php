@@ -124,4 +124,32 @@ class ProductionStageController extends Controller
             'order' => $order
         ]);
     }
+
+    public function pauseStage($stageId)
+    {
+        return response()->json(
+            $this->stageService->pauseStage($stageId)
+        );
+    }
+
+    public function resumeStage($stageId)
+    {
+        return response()->json(
+            $this->stageService->resumeStage($stageId)
+        );
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }

@@ -81,4 +81,67 @@ class ProductionStageService
         $order = $this->orderDao->findById($orderId);
         return $this->orderDao->updateStatus($order,'rejected');
     }
+//استئناف مرحلة
+    public function resumeStage($stageId)
+    {
+        $stage = $this->stageDao->findById($stageId);
+
+        if (!$stage) {
+            return ['error' => true, 'message' => 'Stage not found'];
+        }
+
+        if ($stage->status !== 'pending') {
+            return ['error' => true, 'message' => 'Only paused stage can be resumed'];
+        }
+
+        // 1. رجّع المرحلة active
+        $this->stageDao->updateStatus($stage, 'active');
+
+        // 2. رجّع الطلب in_progress
+        $order = $this->orderDao->findById($stage->production_order_id);
+        $this->orderDao->updateStatus($order, 'in_progress');
+
+        return [
+            'error' => false,
+            'message' => 'Stage resumed and order resumed',
+            'stage' => $stage,
+            'order' => $order
+        ];
+    }
+//إيقاف مرحلة
+
+    public function pauseStage($stageId)
+    {
+        $stage = $this->stageDao->findById($stageId);
+
+        if (!$stage) {
+            return ['error' => true, 'message' => 'Stage not found'];
+        }
+
+        if ($stage->status !== 'active') {
+            return ['error' => true, 'message' => 'Only active stage can be paused'];
+        }
+
+        // 1. وقف المرحلة
+        $this->stageDao->updateStatus($stage, 'pending');
+
+        // 2. وقف الطلب المرتبط
+        $order = $this->orderDao->findById($stage->production_order_id);
+        $this->orderDao->updateStatus($order, 'paused');
+
+        return [
+            'error' => false,
+            'message' => 'Stage paused and order paused',
+            'stage' => $stage,
+            'order' => $order
+        ];
+    }
+
+
+
+
+
+
+
+
 }

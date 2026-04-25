@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CarStockItem;
 use App\Models\Sale;
 use App\Models\DistributionTask;
+use App\Models\SaleItem;
+use App\Models\Store;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+
 
 class SaleController extends Controller
 {
@@ -16,45 +20,39 @@ class SaleController extends Controller
             'task_id' => 'required|exists:distribution_tasks,id',
         ]);
 
+        $task = DistributionTask::find($request->task_id);
+        $store = Store::find($request->store_id);
         $user = auth()->user();
 
-        $task = DistributionTask::findOrFail($request->task_id);
-
-        // 🔵 Retail → لازم زيارة مسبقة
-        if ($task->type === 'retail') {
-
-            $storePivot = $task->stores()
-                ->where('store_id', $request->store_id)
-                ->first();
-
-            if (!$storePivot || !$storePivot->pivot->visited) {
-                return response()->json([
-                    'message' => 'You must scan store first'
-                ], 400);
-            }
+        if (!$task || !$store) {
+            return response()->json(['message' => 'Invalid data'], 404);
         }
 
-        // 🔴 Wholesale → لازم scan قبل البيع
-        if ($task->type === 'wholesale') {
+        $pivot = $task->stores()
+            ->where('store_id', $store->id)
+            ->first();
 
-            $storePivot = $task->stores()
-                ->where('store_id', $request->store_id)
-                ->first();
-
-            if (!$storePivot || !$storePivot->pivot->scanned_at) {
-                return response()->json([
-                    'message' => 'You must scan store first'
-                ], 400);
-            }
+        if (!$pivot) {
+            return response()->json(['message' => 'Store not in task'], 400);
         }
 
-        $sale = Sale::create([
-            'store_id' => $request->store_id,
-            'distribution_task_id' => $task->id,
-            'user_id' => $user->id,
-            'date' => now(),
-            'total_amount' => 0
-        ]);
+        // Retail لازم scan
+        if ($store->type === 'retail' && !$pivot->pivot->visited) {
+            return response()->json(['message' => 'Scan store first'], 400);
+        }
+
+        $sale = Sale::firstOrCreate(
+            [
+                'store_id' => $store->id,
+                'distribution_task_id' => $task->id,
+                'user_id' => $user->id,
+                'status' => 'draft'
+            ],
+            [
+                'date' => now(),
+                'total_amount' => 0
+            ]
+        );
 
         return response()->json([
             'sale_id' => $sale->id
@@ -62,8 +60,6 @@ class SaleController extends Controller
     }
 
 
-
-    //إضافة منتجات على البيع
     public function addItems(Request $request, $saleId)
     {
         $request->validate([
@@ -73,30 +69,30 @@ class SaleController extends Controller
             'items.*.price' => 'required|numeric|min:0',
         ]);
 
-        $sale = Sale::findOrFail($saleId);
-        $user = auth()->user();
+        $sale = Sale::with('items')->find($saleId);
+
+        if (!$sale) {
+            return response()->json(['message' => 'Sale not found'], 404);
+        }
 
         if ($sale->status === 'confirmed') {
-            return response()->json([
-                'message' => 'Cannot modify confirmed sale'
-            ], 400);
+            return response()->json(['message' => 'Cannot modify confirmed sale'], 400);
         }
 
         DB::beginTransaction();
 
         try {
-
-            $total = $sale->total_amount;
+            $total = 0;
 
             foreach ($request->items as $item) {
 
-                $stockItem = \App\Models\CarStockItem::where('id', $item['car_stock_item_id'])
+                $stockItem = CarStockItem::where('id', $item['car_stock_item_id'])
                     ->lockForUpdate()
                     ->first();
 
-                if ($stockItem->carStock->user_id != $user->id) {
+                if (!$stockItem) {
                     DB::rollBack();
-                    return response()->json(['message' => 'Unauthorized stock item'], 403);
+                    return response()->json(['message' => 'Stock item not found'], 404);
                 }
 
                 if ($stockItem->remaining_quantity < $item['quantity']) {
@@ -104,34 +100,41 @@ class SaleController extends Controller
                     return response()->json(['message' => 'Not enough stock'], 400);
                 }
 
+                // خصم المخزون
                 $stockItem->decrement('remaining_quantity', $item['quantity']);
 
-                $existingItem = \App\Models\SaleItem::where('sale_id', $sale->id)
-                    ->where('car_stock_item_id', $stockItem->id)
-                    ->first();
+                // إضافة أو تحديث المنتج في الفاتورة
+                $existingItem = SaleItem::where([
+                    'sale_id' => $sale->id,
+                    'car_stock_item_id' => $stockItem->id
+                ])->first();
 
                 if ($existingItem) {
-                    $existingItem->increment('quantity', $item['quantity']);
+                    $existingItem->quantity += $item['quantity'];
+                    $existingItem->save();
                 } else {
-                    \App\Models\SaleItem::create([
+                    SaleItem::create([
                         'sale_id' => $sale->id,
                         'car_stock_item_id' => $stockItem->id,
                         'finished_product_batch_id' => $stockItem->finished_product_batch_id,
                         'quantity' => $item['quantity'],
-                        'price' => $item['price']
+                        'price' => $item['price'],
                     ]);
                 }
 
                 $total += $item['quantity'] * $item['price'];
             }
 
-            $sale->update(['total_amount' => $total]);
+            $sale->update([
+                'total_amount' => $sale->total_amount + $total
+            ]);
 
             DB::commit();
 
             return response()->json([
                 'message' => 'Items added successfully',
-                'total' => $total
+                'total_added' => $total,
+                'sale_total' => $sale->total_amount
             ]);
 
         } catch (\Exception $e) {
@@ -145,43 +148,10 @@ class SaleController extends Controller
     }
 
 
-    public function receiveStock(Request $request)
-    {
-        $request->validate([
-            'items' => 'required|array',
-            'items.*.batch_id' => 'required|exists:finished_product_batches,id',
-            'items.*.quantity' => 'required|numeric|min:1'
-        ]);
 
-        $user = auth()->user();
 
-        foreach ($request->items as $item) {
 
-            $batch = \App\Models\FinishedProductBatch::findOrFail($item['batch_id']);
 
-            if ($batch->quantity < $item['quantity']) {
-                return response()->json([
-                    'message' => 'الكمية غير كافية في المستودع'
-                ], 400);
-            }
 
-            // 🔻 خصم من المستودع
-            $batch->decrement('quantity', $item['quantity']);
 
-            // 🔺 إضافة لمخزون السيارة
-            \App\Models\CarStock::updateOrCreate(
-                [
-                    'user_id' => $user->id,
-                    'batch_id' => $batch->id
-                ],
-                [
-                    'quantity' => DB::raw('quantity + ' . $item['quantity'])
-                ]
-            );
-        }
-
-        return response()->json([
-            'message' => 'تم استلام البضاعة بنجاح'
-        ]);
-
-}}
+}

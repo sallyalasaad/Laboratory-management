@@ -4,27 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\DistributionTask;
 use App\Models\Store;
+use App\Services\VisitService;
 use Illuminate\Http\Request;
 
 class StoreController extends Controller
 {
-    // 🔥 دالة موحدة لتسجيل الزيارة
-    private function markVisited($task, $storeId)
-    {
-        $storePivot = $task->stores()
-            ->where('store_id', $storeId)
-            ->first();
-
-        if ($storePivot && !$storePivot->pivot->visited) {
-            $task->stores()->updateExistingPivot($storeId, [
-                'visited' => true,
-                'visited_at' => now(),
-            ]);
-        }
-    }
-
-    // 📌 scan (يستخدم فقط بالمفرق)
-    public function scanStore(Request $request)
+    public function scanStore(Request $request,VisitService $visitService)
     {
         $request->validate([
             'barcode' => 'required'
@@ -40,11 +25,11 @@ class StoreController extends Controller
 
         $task = DistributionTask::where('user_id', $user->id)
             ->whereDate('date', now()->toDateString())
-            ->whereIn('status', ['in_progress'])
+            ->where('status', 'in_progress')
             ->first();
 
         if (!$task) {
-            return response()->json(['message' => 'No active task'], 400);
+            return response()->json(['message' => 'No active task'], 404);
         }
 
         $storePivot = $task->stores()
@@ -55,24 +40,15 @@ class StoreController extends Controller
             return response()->json(['message' => 'Store not in your task'], 400);
         }
 
-        // 🔵 Retail → تسجيل زيارة مباشرة
-        if ($task->type === 'retail') {
-            $this->markVisited($task, $store->id);
-        }
-
-        // 🔴 Wholesale → تسجيل scan فقط
-        if ($task->type === 'wholesale') {
-            $task->stores()->updateExistingPivot($store->id, [
-                'scanned_at' => now()
-            ]);
+        // Retail → تسجيل زيارة فقط
+        if ($store->type === 'retail') {
+            $visitService->markVisited($task, $store->id);
         }
 
         return response()->json([
             'store_id' => $store->id,
-            'store_name' => $store->name,
-            'task_id' => $task->id,
-            'task_type' => $task->type,
-            'scanned' => true
+            'store_type' => $store->type,
+            'must_sell' => $store->type === 'wholesale'
         ]);
     }
 }

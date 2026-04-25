@@ -10,6 +10,7 @@ class Store extends Model
     'region_id',
     'name',
     'barcode',
+    'type',
     'lat',
     'lng'
 ];

@@ -3,37 +3,79 @@
 namespace Database\Seeders;
 
 use App\Models\Store;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class StoreSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
+
         Store::insert([
+
+            // 🟢 Cham City Center
+            [
+                'region_id' => 1, // كفرسوسة
+                'name' => 'Cham City Center',
+                'barcode' => 'MALL001',
+                'lat' => 33.50067,
+                'lng' => 36.27431,
+                'type' => 'wholesale'
+            ],
+
+            // 🟢 Qasioun Mall
+            [
+                'region_id' => 2, // برزة
+                'name' => 'Qasioun Mall',
+                'barcode' => 'MALL002',
+                'lat' => 33.54890,
+                'lng' => 36.31381,
+                'type' => 'wholesale'
+            ],
+
+            // 🟢 Malki Mall
+            [
+                'region_id' => 3, // المالكي
+                'name' => 'Malki Mall',
+                'barcode' => 'MALL003',
+                'lat' => 33.51905,
+                'lng' => 36.27187,
+                'type' => 'wholesale'
+            ],
+
+            // 🟢 Town Center
+            [
+                'region_id' => 4, // صحنايا
+                'name' => 'Town Center',
+                'barcode' => 'MALL004',
+                'lat' => 33.45788,
+                'lng' => 36.27239,
+                'type' => 'wholesale'
+            ],
+
+            // 🟢 Dmall
+            [
+                'region_id' => 5, // دمر
+                'name' => 'Dmall',
+                'barcode' => 'MALL005',
+                'lat' => 33.51889,
+                'lng' => 36.20806,
+                'type' => 'wholesale'
+            ],
+
             [
                 'region_id' => 1,
-                'name' => 'سوق الألبان المزة',
-                'barcode' => 'ST001',
-                'lat' => 33.5102,
-                'lng' => 36.2784
-            ],
-            [
+                'name' => 'Al Sham Supermarket',
+                'barcode' => 'RET001',
+                'lat' => 33.50210,
+                'lng' => 36.27610,
+                'type' => 'retail'
+            ],[
                 'region_id' => 1,
-                'name' => 'مؤسسة الحليب',
-                'barcode' => 'ST002',
-                'lat' => 33.5110,
-                'lng' => 36.2790
-            ],
-            [
-                'region_id' => 2,
-                'name' => 'سمانة جرمانا 1',
-                'barcode' => 'ST003',
-                'lat' => 33.4833,
-                'lng' => 36.3333
+                'name' => 'Fresh Mini Market',
+                'barcode' => 'RET002',
+                'lat' => 33.50355,
+                'lng' => 36.27840,
+                'type' => 'retail'
             ],
         ]);
     }

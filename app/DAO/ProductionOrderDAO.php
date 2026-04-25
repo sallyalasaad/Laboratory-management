@@ -52,8 +52,8 @@ class ProductionOrderDAO
     }public function getIncomingOrders()
 {
     return ProductionOrder::with(['product'])
-        ->where('status', 'pending') // فقط الطلبات الجديدة التي لم تُعالج بعد
-        ->orderBy('created_at', 'desc')
+        ->whereIn('status', ['pending','accepted'])
+    ->orderBy('created_at', 'desc')
         ->get();
 }
 
