@@ -235,6 +235,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper'])->group(function () {
 
+    // Display all finished product batches in FIFO order
+    Route::get('/finished-product-batches', [FinishedProductWarehouseController::class, 'listFinishedProductBatches']);
+
+    // Display finished products list
+    Route::get('/finished-products-list', [FinishedProductWarehouseController::class, 'listFinishedProducts']);
+
     // Display all finished products in warehouse
     Route::get('/finished-products', [FinishedProductWarehouseController::class, 'getAllFinishedProducts']);
 
