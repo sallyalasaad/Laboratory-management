@@ -118,4 +118,16 @@ class FinishedProductTaskService
 
         return $createdAllocations;
     }
+
+    public function getProductionEmployeeTasks($userId = null)
+    {
+        $query = FinishedProductTask::with(['user', 'driver']);
+
+        // إذا كان المستخدم موظف إنتاج، عرض مهامه فقط
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->orderBy('created_at', 'desc')->get();
+    }
 }

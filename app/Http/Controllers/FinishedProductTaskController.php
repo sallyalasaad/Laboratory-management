@@ -64,4 +64,25 @@ class FinishedProductTaskController extends Controller
             return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
         }
     }
+
+    // Display production employee tasks for admin and production employee
+    public function getTasks(Request $request)
+    {
+        $user = Auth::user();
+        $userId = null;
+
+        // إذا كان المستخدم موظف إنتاج، عرض مهامه فقط
+        if ($user->hasRole('product_storekeeper')) {
+            $userId = $user->id;
+        }
+        // الـ admin والـ super_admin يمكنهم رؤية جميع المهام
+
+        $tasks = $this->service->getProductionEmployeeTasks($userId);
+
+        return response()->json([
+            'message' => 'product storekeeper tasks retrieved successfully',
+            'data' => $tasks,
+            'count' => count($tasks)
+        ], 200);
+    }
 }

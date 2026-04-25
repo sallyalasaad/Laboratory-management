@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductionOrderController;
 use App\Http\Controllers\ProductionStageController;
 use App\Http\Controllers\FinishedProductBatchController;
 use App\Http\Controllers\FinishedProductTaskController;
+use App\Http\Controllers\FinishedProductWarehouseController;
 use App\Http\Controllers\RawMaterialTaskController;
 use App\Http\Controllers\RegionController;
 use App\Http\Controllers\SaleController;
@@ -215,12 +216,30 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:admin|super_admin'])
         ->post('/finished-product-tasks/send', [FinishedProductTaskController::class, 'createSendTask']);
 
+    // Display product_storekeeper tasks for admin and production employee only
+    Route::middleware(['role:admin|super_admin|product_storekeeper'])
+        ->get('/finished-product-tasks', [FinishedProductTaskController::class, 'getTasks']);
+
     // Warehouse keeper confirms sending
     Route::middleware(['role:product_storekeeper|admin|super_admin'])
         ->post('/finished-product-tasks/{id}/confirm-send', [FinishedProductTaskController::class, 'confirmSend']);
     // Warehouse keeper confirms receiving
     Route::middleware(['role:driver|admin|super_admin'])
         ->post('/finished-product-tasks/{id}/receive', [FinishedProductReceiveController::class, 'confirmReceive']);
+
+});
+
+//////////////////////////////////////////////////////////
+// Finished Product Warehouse (Inventory)
+//////////////////////////////////////////////////////////
+
+Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper'])->group(function () {
+
+    // Display all finished products in warehouse
+    Route::get('/finished-products', [FinishedProductWarehouseController::class, 'getAllFinishedProducts']);
+
+    // Display product details with batch information
+    Route::get('/finished-products/{productId}/details', [FinishedProductWarehouseController::class, 'getProductDetails']);
 
 });
 
