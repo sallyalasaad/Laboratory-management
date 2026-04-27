@@ -21,6 +21,7 @@ class SaleController extends Controller
         ]);
 
         $task = DistributionTask::find($request->task_id);
+        app(\App\Services\TaskTimeGuard::class)->check($task);
         $store = Store::find($request->store_id);
         $user = auth()->user();
 
@@ -110,6 +111,10 @@ class SaleController extends Controller
         ]);
 
         $sale = Sale::findOrFail($saleId);
+
+// ✅ IMPORTANT: منع أي إضافة خارج وقت المهمة
+        $task = $sale->distributionTask;
+        app(\App\Services\TaskTimeGuard::class)->check($task);
 
         if ($sale->status === 'confirmed') {
             return response()->json(['message' => 'Cannot modify confirmed sale'], 400);

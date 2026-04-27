@@ -33,7 +33,8 @@ class StoreController extends Controller
         if (!$task) {
             return response()->json(['message' => 'No active task'], 404);
         }
-
+        $guard = app(\App\Services\TaskTimeGuard::class);
+        $guard->check($task);
         $storePivot = $task->stores()
             ->where('store_id', $store->id)
             ->first();

@@ -18,10 +18,13 @@ class InvoiceController extends Controller
             return response()->json(['message' => 'Sale not found'], 404);
         }
 
+// ✅ مهم جداً: منع التأكيد خارج وقت المهمة
+        $task = $sale->distributionTask;
+        app(\App\Services\TaskTimeGuard::class)->check($task);
+
         if ($sale->status === 'confirmed') {
             return response()->json(['message' => 'Already confirmed'], 400);
         }
-
         // ❗ validation خارج transaction
         if ($sale->store->type === 'wholesale' && $sale->items->isEmpty()) {
             return response()->json([
