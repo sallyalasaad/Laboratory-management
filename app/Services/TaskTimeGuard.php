@@ -1,32 +1,27 @@
 <?php
 
-
 namespace App\Services;
 
-
-
-use App\Models\DistributionTask;
 use Carbon\Carbon;
+use Exception;
 
 class TaskTimeGuard
 {
-    public function validateActiveTask(DistributionTask $task): void
+    public function check($task): void
     {
         $now = now();
 
         $start = Carbon::parse($task->date . ' ' . $task->start_time);
         $end   = Carbon::parse($task->date . ' ' . $task->end_time);
 
-        if ($task->status === 'completed') {
-            throw new \Exception("Task already completed");
+        // ❌ قبل وقت المهمة
+        if ($now->lt($start)) {
+            throw new Exception('Task not started yet');
         }
 
-        if ($task->status === 'failed') {
-            throw new \Exception("Task expired");
-        }
-
-        if (!$now->between($start, $end)) {
-            throw new \Exception("Outside task time window");
+        // ❌ بعد انتهاء المهمة
+        if ($now->gt($end)) {
+            throw new Exception('Task expired');
         }
     }
 }
