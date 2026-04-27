@@ -361,13 +361,13 @@ class DistributionTaskController extends Controller
             $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
             $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
 
-            // 🔴 انتهى الوقت وما اكتملت → Failed
+            // 🔴 انتهى الوقت
             if ($now->gt($end) && $task->status !== 'completed') {
                 $task->update(['status' => 'failed']);
                 continue;
             }
 
-            // 🟡 داخل الوقت → In Progress
+            // 🟡 ضمن الوقت
             if ($now->between($start, $end) && $task->status === 'pending') {
                 $task->update(['status' => 'in_progress']);
             }
@@ -377,16 +377,27 @@ class DistributionTaskController extends Controller
                 $now->between($start, $end) &&
                 in_array($task->status, ['pending', 'in_progress'])
             ) {
+
                 $currentTask = [
                     'id' => $task->id,
                     'region' => $task->region->name,
+                    'region_lat' => $task->region->lat ?? null,
+                    'region_lng' => $task->region->lng ?? null,
                     'time' => $task->start_time . ' - ' . $task->end_time,
                     'status' => $task->status,
-                    'stores_total' => $task->stores->count(),
-                    'visited' => $task->stores->where('pivot.visited', true)->count(),
+
+                    'stores' => $task->stores->map(function ($store) {
+                        return [
+                            'id' => $store->id,
+                            'name' => $store->name,
+                            'lat' => $store->lat,
+                            'lng' => $store->lng,
+                            'visited' => $store->pivot->visited,
+                        ];
+                    }),
                 ];
 
-                break; // أهم نقطة: أول مهمة حالية فقط
+                break;
             }
         }
 
@@ -395,6 +406,32 @@ class DistributionTaskController extends Controller
             'message' => $currentTask ? null : 'No current task'
         ]);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /////بدء المهمة
     public function startTask($id, Request $request)
@@ -554,18 +591,54 @@ class DistributionTaskController extends Controller
                     'time' => $task->start_time . ' - ' . $task->end_time,
                     'status' => $task->status,
                     'region' => $task->region->name,
-                    'stores_count' => $task->stores->count(),
-                    'visited_count' => $task->stores->where('pivot.visited', true)->count(),
+                    //'lat' => $task->region->lat ?? null,
+                    //'lng' => $task->region->lng ?? null,
+
+                    'stores' => $task->stores->map(function ($store) {
+                        return [
+                            'id' => $store->id,
+                            'name' => $store->name,
+                            'lat' => $store->lat,
+                            'lng' => $store->lng,
+                            'visited' => $store->pivot->visited,
+                        ];
+                    }),
                 ];
             });
 
         return response()->json($tasks);
     }
 
+//عرض المحلات للسائق
+    public function myStores()
+    {
+        $user = auth()->user();
 
+        $tasks = DistributionTask::with(['stores'])
+            ->where('user_id', $user->id)
+            ->whereDate('date', now()->toDateString())
+            ->get();
 
+        $stores = [];
 
+        foreach ($tasks as $task) {
+            foreach ($task->stores as $store) {
+                $stores[] = [
+                    'task_id' => $task->id,
+                    'store_id' => $store->id,
+                    'name' => $store->name,
+                    'type' => $store->type,
+                    'lat' => $store->lat,
+                    'lng' => $store->lng,
+                    'visited' => $store->pivot->visited,
+                ];
+            }
+        }
 
+        return response()->json([
+            'data' => $stores
+        ]);
+    }
 
 
 

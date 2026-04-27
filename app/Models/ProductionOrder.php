@@ -48,4 +48,7 @@ class ProductionOrder extends Model
     {
         return $this->hasMany(Note::class, 'production_order_id');
     }
+
+
+
 }

@@ -75,7 +75,7 @@ class RawMaterialTaskController extends Controller
             'route' => 'send_to_production',
             'status' => 'pending',
             'details' => [
-               //'production_order_id' => $productionOrder->id,
+                //'production_order_id' => $productionOrder->id,
                 'items' => $request->items
             ]
         ]);
@@ -143,20 +143,20 @@ class RawMaterialTaskController extends Controller
     {
         $user = Auth::user();
 
-    $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'receive')->firstOrFail();
+        $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'receive')->firstOrFail();
 //$task = RawMaterialTask::find($id);
 
-if (!$task) {
-    return response()->json(['message' => 'Task not found'], 404);
-}
+        if (!$task) {
+            return response()->json(['message' => 'Task not found'], 404);
+        }
 
-if ($task->user_id != $user->id) {
-    return response()->json(['message' => 'Unauthorized'], 403);
-}
+        if ($task->user_id != $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
-if ($task->route !== 'receive') {
-    return response()->json(['message' => 'Invalid task route'], 400);
-}
+        if ($task->route !== 'receive') {
+            return response()->json(['message' => 'Invalid task route'], 400);
+        }
         $request->validate([
             'items' => 'required|array',
             'items.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
@@ -192,10 +192,10 @@ if ($task->route !== 'receive') {
         $user = Auth::user();
 
         $task = RawMaterialTask::where('id', $id)->where('user_id', $user->id)->where('route', 'receive')->firstOrFail();
-          if ($task->status === 'completed') {
-    return response()->json([
-        'message' => 'Task already completed'
-    ], 400);}
+        if ($task->status === 'completed') {
+            return response()->json([
+                'message' => 'Task already completed'
+            ], 400);}
         $details = $task->details ?? [];
         $items = $details['pending_received_items'] ?? $request->items ?? [];
 
@@ -237,98 +237,98 @@ if ($task->route !== 'receive') {
 
     // Warehouse confirms sending to production: allocate FIFO and attach to production order
     public function confirmSend(Request $request, $id)
-{
-    $user = Auth::user();
+    {
+        $user = Auth::user();
 
-    $task = RawMaterialTask::where('id', $id)
-        ->where('user_id', $user->id)
-        ->where('route', 'send_to_production')
-        ->firstOrFail();
+        $task = RawMaterialTask::where('id', $id)
+            ->where('user_id', $user->id)
+            ->where('route', 'send_to_production')
+            ->firstOrFail();
 
-    if ($task->status === 'completed') {
-        return response()->json(['message' => 'Task already completed'], 400);
-    }
+        if ($task->status === 'completed') {
+            return response()->json(['message' => 'Task already completed'], 400);
+        }
 
-    $items = $task->details['items'] ?? [];
+        $items = $task->details['items'] ?? [];
 
-    if (empty($items)) {
-        return response()->json(['message' => 'No items defined for this send task'], 422);
-    }
+        if (empty($items)) {
+            return response()->json(['message' => 'No items defined for this send task'], 422);
+        }
 
-    $createdAllocations = [];
+        $createdAllocations = [];
 
-    try {
-        DB::transaction(function () use ($items, $task, &$createdAllocations) {
-            foreach ($items as $it) {
-                $rawMaterialId = $it['raw_material_id'];
-                $qty = $it['quantity'];
+        try {
+            DB::transaction(function () use ($items, $task, &$createdAllocations) {
+                foreach ($items as $it) {
+                    $rawMaterialId = $it['raw_material_id'];
+                    $qty = $it['quantity'];
 
-                $allocs = $this->inventory->allocateFifo($rawMaterialId, $qty);
+                    $allocs = $this->inventory->allocateFifo($rawMaterialId, $qty);
 
-                $allocatedQty = array_sum(array_map(fn($a) => $a['quantity'], $allocs));
-                if ($allocatedQty < $qty) {
-                    throw new \Exception("Insufficient inventory for raw material id {$rawMaterialId}: requested {$qty}, allocated {$allocatedQty}");
+                    $allocatedQty = array_sum(array_map(fn($a) => $a['quantity'], $allocs));
+                    if ($allocatedQty < $qty) {
+                        throw new \Exception("Insufficient inventory for raw material id {$rawMaterialId}: requested {$qty}, allocated {$allocatedQty}");
+                    }
+
+                    foreach ($allocs as $alloc) {
+                        // تخزين التخصيص مباشرة ضمن المهمة، بدون أمر إنتاج
+                        $createdAllocations[] = [
+                            'raw_material_id' => $rawMaterialId,
+                            'batch_id' => $alloc['batch_id'],
+                            'quantity' => $alloc['quantity']
+                        ];
+                    }
                 }
 
-                foreach ($allocs as $alloc) {
-                    // تخزين التخصيص مباشرة ضمن المهمة، بدون أمر إنتاج
-                    $createdAllocations[] = [
-                        'raw_material_id' => $rawMaterialId,
-                        'batch_id' => $alloc['batch_id'],
-                        'quantity' => $alloc['quantity']
-                    ];
-                }
-            }
+                $task->status = 'completed';
+                $task->sent_at = now();
+                $details = $task->details ?? [];
+                $details['sent_allocations'] = $createdAllocations;
+                unset($details['items']);
+                $task->details = $details;
+                $task->save();
+            });
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
+        }
 
-            $task->status = 'completed';
-            $task->sent_at = now();
-            $details = $task->details ?? [];
-            $details['sent_allocations'] = $createdAllocations;
-            unset($details['items']);
-            $task->details = $details;
-            $task->save();
-        });
-    } catch (\Exception $e) {
-        return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
-    }
-
-    return response()->json([
-        'message' => 'Materials sent successfully',
-        'allocations' => $createdAllocations
-    ]);
-}
-    // Warehouse adds a note to the task (sent to admin)
- public function addNote(Request $request)
-{
-    $user = Auth::user();
-
-    $data = $request->validate([
-        'message' => 'required|string'
-    ]);
-
-    // جلب كل الأدمنز
-    $admins = User::role('admin')->get();
-
-    if ($admins->isEmpty()) {
-        return response()->json(['message' => 'Admin not found'], 404);
-    }
-
-    $notes = [];
-
-    foreach ($admins as $admin) {
-        $notes[] = Note::create([
-            'from_user_id' => $user->id,
-            'to_user_id' => $admin->id,
-            'message' => $data['message'],
-            'is_read' => false
+        return response()->json([
+            'message' => 'Materials sent successfully',
+            'allocations' => $createdAllocations
         ]);
     }
+    // Warehouse adds a note to the task (sent to admin)
+    public function addNote(Request $request)
+    {
+        $user = Auth::user();
 
-    return response()->json([
-        'message' => 'Note sent to admin(s)',
-        'notes' => $notes
-    ], 201);
-}
+        $data = $request->validate([
+            'message' => 'required|string'
+        ]);
+
+        // جلب كل الأدمنز
+        $admins = User::role('admin')->get();
+
+        if ($admins->isEmpty()) {
+            return response()->json(['message' => 'Admin not found'], 404);
+        }
+
+        $notes = [];
+
+        foreach ($admins as $admin) {
+            $notes[] = Note::create([
+                'from_user_id' => $user->id,
+                'to_user_id' => $admin->id,
+                'message' => $data['message'],
+                'is_read' => false
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Note sent to admin(s)',
+            'notes' => $notes
+        ], 201);
+    }
     // Admin lists notes for a task (shows read/unread)
     public function adminListNotes()
     { /** @var \App\Models\User $user */
@@ -338,14 +338,14 @@ if ($task->route !== 'receive') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-         $notes = Note::with(['fromUser'])
-        ->orderBy('is_read', 'asc')
-        ->orderBy('created_at', 'desc')
-        ->get();
+        $notes = Note::with(['fromUser'])
+            ->orderBy('is_read', 'asc')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-    return response()->json([
-        'notes' => $notes
-    ]);
+        return response()->json([
+            'notes' => $notes
+        ]);
     }
 
     // Admin marks a single note as read
@@ -407,48 +407,48 @@ if ($task->route !== 'receive') {
     }
 
 
-   public function confirmReceiveinp(Request $request, $id)
-{
-    /** @var \App\Models\User $user */
-    $user = Auth::user();
+    public function confirmReceiveinp(Request $request, $id)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
 
-    // البحث عن مهمة إرسال المواد إلى الإنتاج
-    $task = RawMaterialTask::where('id', $id)
-        ->where('route', 'send_to_production')
-        ->firstOrFail();
+        // البحث عن مهمة إرسال المواد إلى الإنتاج
+        $task = RawMaterialTask::where('id', $id)
+            ->where('route', 'send_to_production')
+            ->firstOrFail();
 
-    // التحقق من حالة المهمة: يجب أن يكون أمين المستودع أكمل الإرسال أو تم التأكيد مسبقاً
-    $details = $task->details ?? [];
-    if (($task->status !== 'completed' && $task->status !== 'received_by_production') || empty($details['sent_allocations'])) {
+        // التحقق من حالة المهمة: يجب أن يكون أمين المستودع أكمل الإرسال أو تم التأكيد مسبقاً
+        $details = $task->details ?? [];
+        if (($task->status !== 'completed' && $task->status !== 'received_by_production') || empty($details['sent_allocations'])) {
+            return response()->json([
+                'message' => 'Task not ready for production receiving. Warehouse must complete sending first.'
+            ], 400);
+        }
+
+        // التأكد إن المواد لم تُستلم مسبقاً
+        if (!empty($details['production_received_at'])) {
+            return response()->json([
+                'message' => 'Materials already confirmed as received by production'
+            ], 400);
+        }
+
+        // تحديث المهمة داخل معاملة قاعدة بيانات لضمان atomicity
+        DB::transaction(function () use ($task, $user, &$details) {
+            // تحديث تفاصيل المهمة بتاريخ وموظف الاستلام
+            $details['production_received_at'] = now();
+            $details['production_received_by'] = $user->id;
+            $task->details = $details;
+
+            // تحديث حالة المهمة
+            $task->status = 'received_by_production';
+            $task->save();
+        });
+
         return response()->json([
-            'message' => 'Task not ready for production receiving. Warehouse must complete sending first.'
-        ], 400);
+            'message' => 'تم تأكيد استلام المواد من قبل الإنتاج',
+            'task' => $task
+        ]);
     }
-
-    // التأكد إن المواد لم تُستلم مسبقاً
-    if (!empty($details['production_received_at'])) {
-        return response()->json([
-            'message' => 'Materials already confirmed as received by production'
-        ], 400);
-    }
-
-    // تحديث المهمة داخل معاملة قاعدة بيانات لضمان atomicity
-    DB::transaction(function () use ($task, $user, &$details) {
-        // تحديث تفاصيل المهمة بتاريخ وموظف الاستلام
-        $details['production_received_at'] = now();
-        $details['production_received_by'] = $user->id;
-        $task->details = $details;
-
-        // تحديث حالة المهمة
-        $task->status = 'received_by_production';
-        $task->save();
-    });
-
-    return response()->json([
-        'message' => 'تم تأكيد استلام المواد من قبل الإنتاج',
-        'task' => $task
-    ]);
-}
 
     // Production employee lists confirmed sent raw materials
     public function listConfirmedSentMaterials(Request $request)

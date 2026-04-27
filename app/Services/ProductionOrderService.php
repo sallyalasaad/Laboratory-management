@@ -53,6 +53,19 @@ class ProductionOrderService
     public function updateStatus($orderId, $status)
     {
         $order = $this->dao->findById($orderId);
+
+        // ❌ منع البدء بدون مواد
+        if ($status === 'in_progress') {
+
+            $hasMaterials = \App\Models\RawMaterialTask::where('production_order_id', $orderId)
+                ->where('status', 'received_by_production')
+                ->exists();
+
+            if (!$hasMaterials) {
+                throw new \Exception("لا يمكن بدء الإنتاج: لا توجد مواد مستلمة من المستودع");
+            }
+        }
+
         return $this->dao->updateStatus($order, $status);
     }public function getCurrentTasks()
 {

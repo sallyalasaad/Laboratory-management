@@ -18,7 +18,7 @@ class FinishedProductTaskController extends Controller
     }
 
     // Admin creates a send task
-    public function createSendTask(Request $request)
+     public function createSendTask(Request $request)
     {
         $request->validate([
             'user_id' => 'required|integer|exists:users,id',
@@ -29,39 +29,67 @@ class FinishedProductTaskController extends Controller
             'items.*.quantity' => 'required|numeric|min:0.0001',
         ]);
 
+        // ✅ تحقق من أمين المستودع
+        $user = User::find($request->user_id);
+        if (!$user || !$user->hasRole('product_storekeeper')) {
+            return response()->json([
+                'message' => 'Selected user must be a product storekeeper'
+            ], 422);
+        }
+
+        // ✅ تحقق من السائق
         $driver = User::find($request->driver_id);
         if (!$driver || !$driver->hasRole('driver')) {
-            return response()->json(['message' => 'Selected driver is invalid or not assigned the driver role'], 422);
+            return response()->json([
+                'message' => 'Selected driver is invalid'
+            ], 422);
         }
 
         try {
             $task = $this->service->createSendTask(
-                Auth::id(),
-                $request->user_id,
+                Auth::id(),              // admin
+                $request->user_id,       // storekeeper
                 $request->driver_id,
                 $request->items
             );
 
-            return response()->json(['message' => 'Send task created', 'task' => $task], 201);
+            return response()->json([
+                'message' => 'Send task created successfully',
+                'task' => $task
+            ], 201);
+
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Error creating task', 'error' => $e->getMessage()], 422);
+            return response()->json([
+                'message' => 'Error creating task',
+                'error' => $e->getMessage()
+            ], 422);
         }
     }
 
-    // Warehouse keeper confirms sending
+    // ✅ Warehouse confirms sending
     public function confirmSend(Request $request, $id)
     {
         $user = Auth::user();
 
+        if (!$user->hasRole('product_storekeeper')) {
+            return response()->json([
+                'message' => 'Only product storekeeper can confirm send'
+            ], 403);
+        }
+
         try {
-            $allocations = $this->service->confirmSend($id);
+            $allocations = $this->service->confirmSend($id, $user->id);
 
             return response()->json([
-                'message' => 'Materials sent successfully',
+                'message' => 'Products sent successfully',
                 'allocations' => $allocations
             ]);
+
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
+            return response()->json([
+                'message' => 'Send failed',
+                'error' => $e->getMessage()
+            ], 422);
         }
     }
 
