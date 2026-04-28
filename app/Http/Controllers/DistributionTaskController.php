@@ -604,6 +604,8 @@ class DistributionTaskController extends Controller
                             'lat' => $store->lat,
                             'lng' => $store->lng,
                             'visited' => $store->pivot->visited,
+                            'type' => $store->type,
+
                         ];
                     }),
                 ];
