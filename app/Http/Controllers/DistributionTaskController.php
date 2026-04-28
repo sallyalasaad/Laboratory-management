@@ -445,7 +445,10 @@ class DistributionTaskController extends Controller
         $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
         $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
 
-        if ($now->lt($start)) {
+        // 🔥 السماح قبل ساعة
+        $allowedStart = $start->copy()->subHour();
+
+        if ($now->lt($allowedStart)) {
             return response()->json(['message' => 'Too early'], 400);
         }
 
