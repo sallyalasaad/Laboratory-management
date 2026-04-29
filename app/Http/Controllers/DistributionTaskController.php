@@ -12,87 +12,89 @@ class DistributionTaskController extends Controller
 {
     /**
      * إنشاء مهمة توزيع وربطها بالسائق والمحلات
-     */
-    public function store(Request $request)
-    {
-        $data = $request->validate([
-            'user_id'    => 'required|exists:users,id',
-            'region_id'  => 'required|exists:regions,id',
-            'date'       => 'required|date',
-            'start_time' => 'required',
-            'end_time'   => 'required',
+     */public function store(Request $request)
+{
+    $data = $request->validate([
+        'user_id'    => 'required|exists:users,id',
+        'region_id'  => 'required|exists:regions,id',
+        'date'       => 'required|date',
+        'start_time' => 'required',
+        'end_time'   => 'required',
+    ]);
+
+    // تحقق أن المستخدم سائق
+    $driver = User::role('driver')
+        ->where('id', $data['user_id'])
+        ->first();
+
+    if (!$driver) {
+        return response()->json([
+            'message' => 'Selected user is not a driver'
+        ], 422);
+    }
+
+    // 🔥 حساب البداية الفعلية (قبل ساعة)
+    $newStart = \Carbon\Carbon::parse($data['date'].' '.$data['start_time'])->subHour();
+    $newEnd   = \Carbon\Carbon::parse($data['date'].' '.$data['end_time']);
+
+    // 🔥 منع التداخل الحقيقي
+    $exists = DistributionTask::where('user_id', $data['user_id'])
+        ->whereDate('date', $data['date'])
+        ->get()
+        ->first(function ($task) use ($newStart, $newEnd) {
+
+            $taskStart = \Carbon\Carbon::parse($task->date.' '.$task->start_time)->subHour();
+            $taskEnd   = \Carbon\Carbon::parse($task->date.' '.$task->end_time);
+
+            return $newStart < $taskEnd && $newEnd > $taskStart;
+        });
+
+    if ($exists) {
+        return response()->json([
+            'message' => 'هذا السائق لديه مهمة ضمن نفس الوقت (مع الساعة المبكرة)'
+        ], 422);
+    }
+
+    DB::beginTransaction();
+
+    try {
+
+        $task = DistributionTask::create([
+            'user_id'    => $driver->id,
+            'region_id'  => $data['region_id'],
+            'date'       => $data['date'],
+            'start_time' => $data['start_time'],
+            'end_time'   => $data['end_time'],
+            'status'     => 'pending',
         ]);
 
-        // تحقق أن المستخدم سائق
-        $driver = User::role('driver')
-            ->where('id', $data['user_id'])
-            ->first();
+        $stores = Store::where('region_id', $data['region_id'])->get();
 
-        if (!$driver) {
-            return response()->json([
-                'message' => 'Selected user is not a driver'
-            ], 422);
-        }
+        $attachData = $stores->mapWithKeys(fn ($store) => [
+            $store->id => [
+                'visited'    => false,
+                'visited_at' => null,
+            ]
+        ])->toArray();
 
-        // 🔥 منع تداخل المهام
-        $exists = DistributionTask::where('user_id', $data['user_id'])
-            ->whereDate('date', $data['date'])
-            ->where(function ($q) use ($data) {
-                $q->whereBetween('start_time', [$data['start_time'], $data['end_time']])
-                    ->orWhereBetween('end_time', [$data['start_time'], $data['end_time']])
-                    ->orWhere(function ($q2) use ($data) {
-                        $q2->where('start_time', '<=', $data['start_time'])
-                            ->where('end_time', '>=', $data['end_time']);
-                    });
-            })
-            ->exists();
+        $task->stores()->attach($attachData);
 
-        if ($exists) {
-            return response()->json([
-                'message' => 'هذا السائق لديه مهمة بنفس الوقت'
-            ], 422);
-        }
+        DB::commit();
 
-        DB::beginTransaction();
+        return response()->json([
+            'message' => 'Mission created successfully',
+            'task_id' => $task->id,
+        ], 201);
 
-        try {
+    } catch (\Exception $e) {
+        DB::rollBack();
 
-            $task = DistributionTask::create([
-                'user_id'    => $driver->id,
-                'region_id'  => $data['region_id'],
-                'date'       => $data['date'],
-                'start_time' => $data['start_time'],
-                'end_time'   => $data['end_time'],
-                'status'     => 'pending',
-            ]);
-
-            $stores = Store::where('region_id', $data['region_id'])->get();
-
-            $attachData = $stores->mapWithKeys(fn ($store) => [
-                $store->id => [
-                    'visited'    => false,
-                    'visited_at' => null,
-                ]
-            ])->toArray();
-
-            $task->stores()->attach($attachData);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Mission created successfully',
-                'task_id' => $task->id,
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'message' => 'Error creating mission',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'message' => 'Error creating mission',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
     /**
      * جلب السائقين
      */
@@ -361,20 +363,23 @@ class DistributionTaskController extends Controller
             $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
             $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
 
+            // 🔥 البداية الفعلية (قبل ساعة)
+            $allowedStart = $start->copy()->subHour();
+
             // 🔴 انتهى الوقت
             if ($now->gt($end) && $task->status !== 'completed') {
                 $task->update(['status' => 'failed']);
                 continue;
             }
 
-            // 🟡 ضمن الوقت
-            if ($now->between($start, $end) && $task->status === 'pending') {
+            // 🟡 ضمن الوقت (بما فيه الساعة المبكرة)
+            if ($now->between($allowedStart, $end) && $task->status === 'pending') {
                 $task->update(['status' => 'in_progress']);
             }
 
             // 🟢 المهمة الحالية
             if (
-                $now->between($start, $end) &&
+                $now->between($allowedStart, $end) &&
                 in_array($task->status, ['pending', 'in_progress'])
             ) {
 
