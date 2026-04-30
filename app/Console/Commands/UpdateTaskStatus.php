@@ -24,10 +24,10 @@ class UpdateTaskStatus extends Command
                 $start = Carbon::parse($task->date . ' ' . $task->start_time);
                 $end   = Carbon::parse($task->date . ' ' . $task->end_time);
 
-                if ($now->between($start, $end)) {
+                // 🔥 يبدأ تلقائي فقط عند الوصول لوقت البداية
+                if ($now->gte($start) && $now->lte($end)) {
                     $task->update(['status' => 'in_progress']);
                 }
-
                 // ❌ فشل المهمة إذا انتهى وقتها وما بدأت
                 if ($now->gt($end)) {
                     $task->update(['status' => 'failed']);

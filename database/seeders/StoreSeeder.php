@@ -12,7 +12,7 @@ class StoreSeeder extends Seeder
 
         Store::insert([
 
-            // 🟢 Cham City Center
+            //  Cham City Center
             [
                 'region_id' => 1, // كفرسوسة
                 'name' => 'Cham City Center',

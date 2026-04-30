@@ -23,13 +23,21 @@ class ProductionStageService
         }
 
         if ($order->status === 'rejected') {
-            return ['error' => true, 'message' => 'تم رفض الطلب ولا يمكن بدء الإنتاج', 'order_status' => $order->status, 'status_code' => 422];
+            return ['error' => true, 'message' => 'تم رفض الطلب ولا يمكن بدء الإنتاج', 'status_code' => 422];
         }
 
-        if ($order->status !== 'accepted') {
-            return ['error' => true, 'message' => 'لا يمكن بدء الطلب قبل القبول', 'order_status' => $order->status, 'status_code' => 422];
+        // ✅ تحقق من وجود مواد فقط
+        $hasStock = \App\Models\RawMaterialBatch::where('remaining_quantity', '>', 0)->exists();
+
+        if (!$hasStock) {
+            return [
+                'error' => true,
+                'message' => 'لا يمكن بدء الإنتاج: لا يوجد مواد أولية في المستودع',
+                'status_code' => 422
+            ];
         }
 
+        // بدء الإنتاج
         $order->status = 'in_progress';
         $order->save();
 
@@ -39,9 +47,13 @@ class ProductionStageService
             $firstStage->save();
         }
 
-        return ['error' => false, 'message' => 'تم بدء الإنتاج', 'order_status' => $order->status, 'order_id' => $order->id];
+        return [
+            'error' => false,
+            'message' => 'تم بدء الإنتاج',
+            'order_status' => $order->status,
+            'order_id' => $order->id
+        ];
     }
-
     public function completeStage($stageId)
     {
         $stage = $this->stageDao->findById($stageId);
@@ -136,10 +148,6 @@ class ProductionStageService
             'order' => $order
         ];
     }
-
-
-
-
 
 
 

@@ -7,51 +7,58 @@ use App\Models\FinishedProductBatch;
 use Illuminate\Support\Facades\DB;
 
 class FinishedProductTaskService
+{public function createSendTask($adminId, $userId, $driverId, $items)
 {
-    public function createSendTask($adminId, $userId, $driverId, $items)
-    {
-        // Check availability for each item
+    return DB::transaction(function () use ($userId, $driverId, $items) {
+
         foreach ($items as $item) {
-            $finishedProductId = $item['finished_product_id'];
-            $requestedQuantity = $item['quantity'];
 
-            $availableQuantity = FinishedProductBatch::where('finished_product_id', $finishedProductId)->sum('remaining_quantity');
+            $available = FinishedProductBatch::where('finished_product_id', $item['finished_product_id'])
+                ->sum('remaining_quantity');
 
-            if ($availableQuantity < $requestedQuantity) {
-                throw new \Exception("Insufficient quantity for finished product ID {$finishedProductId}. Available: {$availableQuantity}, Requested: {$requestedQuantity}");
+            if ($available < $item['quantity']) {
+                throw new \Exception(
+                    "Not enough stock for product {$item['finished_product_id']}. Available: {$available}"
+                );
             }
         }
 
-        $task = FinishedProductTask::create([
+        return FinishedProductTask::create([
             'user_id' => $userId,
             'driver_id' => $driverId,
             'route' => 'send_to_market',
             'status' => 'pending',
             'details' => [
-                'driver_id' => $driverId,
                 'items' => $items
             ]
         ]);
-
-        return $task;
-    }
-
+    });
+}
+    // ✅ FIFO allocation
     public function allocateFifo($finishedProductId, $quantity)
     {
+        $allocations = [];
+        $remaining = $quantity;
+
         $batches = FinishedProductBatch::where('finished_product_id', $finishedProductId)
             ->where('remaining_quantity', '>', 0)
             ->orderBy('production_date', 'asc')
             ->lockForUpdate()
             ->get();
 
-        $allocations = [];
-        $remaining = $quantity;
-
         foreach ($batches as $batch) {
+
             if ($remaining <= 0) break;
 
-            $available = $batch->remaining_quantity;
-            $take = min($available, $remaining);
+            $take = min($batch->remaining_quantity, $remaining);
+
+            $updated = FinishedProductBatch::where('id', $batch->id)
+                ->where('remaining_quantity', '>=', $take)
+                ->decrement('remaining_quantity', $take);
+
+            if (!$updated) {
+                throw new \Exception("Concurrency error on batch {$batch->id}");
+            }
 
             $allocations[] = [
                 'batch_id' => $batch->id,
@@ -61,62 +68,58 @@ class FinishedProductTaskService
             $remaining -= $take;
         }
 
+        if ($remaining > 0) {
+            throw new \Exception("Not enough stock during allocation");
+        }
+
         return $allocations;
     }
 
-    public function confirmSend($taskId)
+
+    public function confirmSend($taskId, $storekeeperId)
     {
         $task = FinishedProductTask::findOrFail($taskId);
+
+        if ($task->user_id != $storekeeperId) {
+            throw new \Exception('Unauthorized');
+        }
 
         if ($task->status !== 'pending') {
             throw new \Exception('Task already processed');
         }
 
-        $items = $task->details['items'] ?? [];
-        $createdAllocations = [];
+        return DB::transaction(function () use ($task) {
 
-        DB::transaction(function () use ($items, $task, &$createdAllocations) {
+            $items = $task->details['items'] ?? [];
+            $allocations = [];
 
             foreach ($items as $item) {
 
-                $finishedProductId = $item['finished_product_id'];
-                $qty = $item['quantity'];
-
-                $allocs = $this->allocateFifo($finishedProductId, $qty);
-
-                $allocatedQty = array_sum(array_map(fn($a) => $a['quantity'], $allocs));
-
-                if ($allocatedQty < $qty) {
-                    throw new \Exception("Insufficient stock for product {$finishedProductId}");
-                }
+                $allocs = $this->allocateFifo(
+                    $item['finished_product_id'],
+                    $item['quantity']
+                );
 
                 foreach ($allocs as $alloc) {
-
-                    $batch = FinishedProductBatch::find($alloc['batch_id']);
-
-                    // ✅ خصم من المستودع (مرة واحدة فقط)
-                    $batch->remaining_quantity -= $alloc['quantity'];
-                    $batch->save();
-
-                    $createdAllocations[] = [
-                        'finished_product_id' => $finishedProductId,
+                    $allocations[] = [
+                        'finished_product_id' => $item['finished_product_id'],
                         'batch_id' => $alloc['batch_id'],
                         'quantity' => $alloc['quantity']
                     ];
                 }
             }
 
-            // ✅ تحديث المهمة
             $task->update([
                 'status' => 'sent',
                 'sent_at' => now(),
                 'details' => [
-                    'allocations' => $createdAllocations
+                    'items' => $items,
+                    'allocations' => $allocations
                 ]
             ]);
-        });
 
-        return $createdAllocations;
+            return $allocations;
+        });
     }
 
     public function getProductionEmployeeTasks($userId = null)

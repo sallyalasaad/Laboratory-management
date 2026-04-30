@@ -12,87 +12,89 @@ class DistributionTaskController extends Controller
 {
     /**
      * إنشاء مهمة توزيع وربطها بالسائق والمحلات
-     */
-    public function store(Request $request)
-    {
-        $data = $request->validate([
-            'user_id'    => 'required|exists:users,id',
-            'region_id'  => 'required|exists:regions,id',
-            'date'       => 'required|date',
-            'start_time' => 'required',
-            'end_time'   => 'required',
+     */public function store(Request $request)
+{
+    $data = $request->validate([
+        'user_id'    => 'required|exists:users,id',
+        'region_id'  => 'required|exists:regions,id',
+        'date'       => 'required|date',
+        'start_time' => 'required',
+        'end_time'   => 'required',
+    ]);
+
+    // تحقق أن المستخدم سائق
+    $driver = User::role('driver')
+        ->where('id', $data['user_id'])
+        ->first();
+
+    if (!$driver) {
+        return response()->json([
+            'message' => 'Selected user is not a driver'
+        ], 422);
+    }
+
+    // 🔥 حساب البداية الفعلية (قبل ساعة)
+    $newStart = \Carbon\Carbon::parse($data['date'].' '.$data['start_time'])->subHour();
+    $newEnd   = \Carbon\Carbon::parse($data['date'].' '.$data['end_time']);
+
+    // 🔥 منع التداخل الحقيقي
+    $exists = DistributionTask::where('user_id', $data['user_id'])
+        ->whereDate('date', $data['date'])
+        ->get()
+        ->first(function ($task) use ($newStart, $newEnd) {
+
+            $taskStart = \Carbon\Carbon::parse($task->date.' '.$task->start_time)->subHour();
+            $taskEnd   = \Carbon\Carbon::parse($task->date.' '.$task->end_time);
+
+            return $newStart < $taskEnd && $newEnd > $taskStart;
+        });
+
+    if ($exists) {
+        return response()->json([
+            'message' => 'هذا السائق لديه مهمة ضمن نفس الوقت (مع الساعة المبكرة)'
+        ], 422);
+    }
+
+    DB::beginTransaction();
+
+    try {
+
+        $task = DistributionTask::create([
+            'user_id'    => $driver->id,
+            'region_id'  => $data['region_id'],
+            'date'       => $data['date'],
+            'start_time' => $data['start_time'],
+            'end_time'   => $data['end_time'],
+            'status'     => 'pending',
         ]);
 
-        // تحقق أن المستخدم سائق
-        $driver = User::role('driver')
-            ->where('id', $data['user_id'])
-            ->first();
+        $stores = Store::where('region_id', $data['region_id'])->get();
 
-        if (!$driver) {
-            return response()->json([
-                'message' => 'Selected user is not a driver'
-            ], 422);
-        }
+        $attachData = $stores->mapWithKeys(fn ($store) => [
+            $store->id => [
+                'visited'    => false,
+                'visited_at' => null,
+            ]
+        ])->toArray();
 
-        // 🔥 منع تداخل المهام
-        $exists = DistributionTask::where('user_id', $data['user_id'])
-            ->whereDate('date', $data['date'])
-            ->where(function ($q) use ($data) {
-                $q->whereBetween('start_time', [$data['start_time'], $data['end_time']])
-                    ->orWhereBetween('end_time', [$data['start_time'], $data['end_time']])
-                    ->orWhere(function ($q2) use ($data) {
-                        $q2->where('start_time', '<=', $data['start_time'])
-                            ->where('end_time', '>=', $data['end_time']);
-                    });
-            })
-            ->exists();
+        $task->stores()->attach($attachData);
 
-        if ($exists) {
-            return response()->json([
-                'message' => 'هذا السائق لديه مهمة بنفس الوقت'
-            ], 422);
-        }
+        DB::commit();
 
-        DB::beginTransaction();
+        return response()->json([
+            'message' => 'Mission created successfully',
+            'task_id' => $task->id,
+        ], 201);
 
-        try {
+    } catch (\Exception $e) {
+        DB::rollBack();
 
-            $task = DistributionTask::create([
-                'user_id'    => $driver->id,
-                'region_id'  => $data['region_id'],
-                'date'       => $data['date'],
-                'start_time' => $data['start_time'],
-                'end_time'   => $data['end_time'],
-                'status'     => 'pending',
-            ]);
-
-            $stores = Store::where('region_id', $data['region_id'])->get();
-
-            $attachData = $stores->mapWithKeys(fn ($store) => [
-                $store->id => [
-                    'visited'    => false,
-                    'visited_at' => null,
-                ]
-            ])->toArray();
-
-            $task->stores()->attach($attachData);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Mission created successfully',
-                'task_id' => $task->id,
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'message' => 'Error creating mission',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'message' => 'Error creating mission',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
     /**
      * جلب السائقين
      */
@@ -361,32 +363,46 @@ class DistributionTaskController extends Controller
             $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
             $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
 
-            // 🔴 انتهى الوقت وما اكتملت → Failed
+            // 🔥 البداية الفعلية (قبل ساعة)
+            $allowedStart = $start->copy()->subHour();
+
+            // 🔴 انتهى الوقت
             if ($now->gt($end) && $task->status !== 'completed') {
                 $task->update(['status' => 'failed']);
                 continue;
             }
 
-            // 🟡 داخل الوقت → In Progress
-            if ($now->between($start, $end) && $task->status === 'pending') {
+            // 🟡 ضمن الوقت (بما فيه الساعة المبكرة)
+            if ($now->between($allowedStart, $end) && $task->status === 'pending') {
                 $task->update(['status' => 'in_progress']);
             }
 
             // 🟢 المهمة الحالية
             if (
-                $now->between($start, $end) &&
+                $now->between($allowedStart, $end) &&
                 in_array($task->status, ['pending', 'in_progress'])
             ) {
+
                 $currentTask = [
                     'id' => $task->id,
                     'region' => $task->region->name,
+                    'region_lat' => $task->region->lat ?? null,
+                    'region_lng' => $task->region->lng ?? null,
                     'time' => $task->start_time . ' - ' . $task->end_time,
                     'status' => $task->status,
-                    'stores_total' => $task->stores->count(),
-                    'visited' => $task->stores->where('pivot.visited', true)->count(),
+
+                    'stores' => $task->stores->map(function ($store) {
+                        return [
+                            'id' => $store->id,
+                            'name' => $store->name,
+                            'lat' => $store->lat,
+                            'lng' => $store->lng,
+                            'visited' => $store->pivot->visited,
+                        ];
+                    }),
                 ];
 
-                break; // أهم نقطة: أول مهمة حالية فقط
+                break;
             }
         }
 
@@ -395,6 +411,32 @@ class DistributionTaskController extends Controller
             'message' => $currentTask ? null : 'No current task'
         ]);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /////بدء المهمة
     public function startTask($id, Request $request)
@@ -408,7 +450,10 @@ class DistributionTaskController extends Controller
         $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
         $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
 
-        if ($now->lt($start)) {
+        // 🔥 السماح قبل ساعة
+        $allowedStart = $start->copy()->subHour();
+
+        if ($now->lt($allowedStart)) {
             return response()->json(['message' => 'Too early'], 400);
         }
 
@@ -554,18 +599,56 @@ class DistributionTaskController extends Controller
                     'time' => $task->start_time . ' - ' . $task->end_time,
                     'status' => $task->status,
                     'region' => $task->region->name,
-                    'stores_count' => $task->stores->count(),
-                    'visited_count' => $task->stores->where('pivot.visited', true)->count(),
+                    //'lat' => $task->region->lat ?? null,
+                    //'lng' => $task->region->lng ?? null,
+
+                    'stores' => $task->stores->map(function ($store) {
+                        return [
+                            'id' => $store->id,
+                            'name' => $store->name,
+                            'lat' => $store->lat,
+                            'lng' => $store->lng,
+                            'visited' => $store->pivot->visited,
+                            'type' => $store->type,
+
+                        ];
+                    }),
                 ];
             });
 
         return response()->json($tasks);
     }
 
+//عرض المحلات للسائق
+    public function myStores()
+    {
+        $user = auth()->user();
 
+        $tasks = DistributionTask::with(['stores'])
+            ->where('user_id', $user->id)
+            ->whereDate('date', now()->toDateString())
+            ->get();
 
+        $stores = [];
 
+        foreach ($tasks as $task) {
+            foreach ($task->stores as $store) {
+                $stores[] = [
+                    'task_id' => $task->id,
+                    'store_id' => $store->id,
+                    'name' => $store->name,
+                    'type' => $store->type,
+                    'lat' => $store->lat,
+                    'lng' => $store->lng,
+                    'visited' => $store->pivot->visited,
+                ];
+            }
+        }
 
+        return response()->json([
+            'data' => $stores
+        ]);
+    }
 
 
 

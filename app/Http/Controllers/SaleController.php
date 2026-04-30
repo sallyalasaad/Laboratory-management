@@ -21,6 +21,7 @@ class SaleController extends Controller
         ]);
 
         $task = DistributionTask::find($request->task_id);
+        app(\App\Services\TaskTimeGuard::class)->check($task);
         $store = Store::find($request->store_id);
         $user = auth()->user();
 
@@ -59,21 +60,61 @@ class SaleController extends Controller
         ]);
     }
 
+    public function allocateFromCarStock($userId, $productId, $quantity)
+    {
+        return DB::transaction(function () use ($userId, $productId, $quantity) {
+
+            $items = CarStockItem::whereHas('carStock', function ($q) use ($userId) {
+                $q->where('user_id', $userId);
+            })
+                ->where('finished_product_id', $productId)
+                ->where('remaining_quantity', '>', 0)
+                ->orderBy('created_at', 'asc')
+                ->lockForUpdate()
+                ->get();
+
+            $remaining = $quantity;
+            $allocations = [];
+
+            foreach ($items as $item) {
+
+                if ($remaining <= 0) break;
+
+                $take = min($item->remaining_quantity, $remaining);
+
+                $item->decrement('remaining_quantity', $take);
+
+                $allocations[] = [
+                    'car_stock_item_id' => $item->id,
+                    'finished_product_batch_id' => $item->finished_product_batch_id,
+                    'quantity' => $take
+                ];
+
+                $remaining -= $take;
+            }
+
+            if ($remaining > 0) {
+                throw new \Exception("Not enough stock for product {$productId}");
+            }
+
+            return $allocations;
+        });
+    }
 
     public function addItems(Request $request, $saleId)
     {
         $request->validate([
             'items' => 'required|array',
-            'items.*.car_stock_item_id' => 'required|exists:car_stock_items,id',
+            'items.*.finished_product_id' => 'required|exists:finished_products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.price' => 'required|numeric|min:0',
         ]);
 
-        $sale = Sale::with('items')->find($saleId);
+        $sale = Sale::findOrFail($saleId);
 
-        if (!$sale) {
-            return response()->json(['message' => 'Sale not found'], 404);
-        }
+// ✅ IMPORTANT: منع أي إضافة خارج وقت المهمة
+        $task = $sale->distributionTask;
+        app(\App\Services\TaskTimeGuard::class)->check($task);
 
         if ($sale->status === 'confirmed') {
             return response()->json(['message' => 'Cannot modify confirmed sale'], 400);
@@ -86,43 +127,25 @@ class SaleController extends Controller
 
             foreach ($request->items as $item) {
 
-                $stockItem = CarStockItem::where('id', $item['car_stock_item_id'])
-                    ->lockForUpdate()
-                    ->first();
+                // 🔥 FIFO من السيارة
+                $allocations = $this->allocateFromCarStock(
+                    auth()->id(),
+                    $item['finished_product_id'],
+                    $item['quantity']
+                );
 
-                if (!$stockItem) {
-                    DB::rollBack();
-                    return response()->json(['message' => 'Stock item not found'], 404);
-                }
+                foreach ($allocations as $alloc) {
 
-                if ($stockItem->remaining_quantity < $item['quantity']) {
-                    DB::rollBack();
-                    return response()->json(['message' => 'Not enough stock'], 400);
-                }
-
-                // خصم المخزون
-                $stockItem->decrement('remaining_quantity', $item['quantity']);
-
-                // إضافة أو تحديث المنتج في الفاتورة
-                $existingItem = SaleItem::where([
-                    'sale_id' => $sale->id,
-                    'car_stock_item_id' => $stockItem->id
-                ])->first();
-
-                if ($existingItem) {
-                    $existingItem->quantity += $item['quantity'];
-                    $existingItem->save();
-                } else {
                     SaleItem::create([
                         'sale_id' => $sale->id,
-                        'car_stock_item_id' => $stockItem->id,
-                        'finished_product_batch_id' => $stockItem->finished_product_batch_id,
-                        'quantity' => $item['quantity'],
+                        'car_stock_item_id' => $alloc['car_stock_item_id'],
+                        'finished_product_batch_id' => $alloc['finished_product_batch_id'],
+                        'quantity' => $alloc['quantity'],
                         'price' => $item['price'],
                     ]);
-                }
 
-                $total += $item['quantity'] * $item['price'];
+                    $total += $alloc['quantity'] * $item['price'];
+                }
             }
 
             $sale->update([
@@ -133,25 +156,59 @@ class SaleController extends Controller
 
             return response()->json([
                 'message' => 'Items added successfully',
-                'total_added' => $total,
-                'sale_total' => $sale->total_amount
+                'total_added' => $total
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
 
             return response()->json([
-                'message' => 'Error',
-                'error' => $e->getMessage()
+                'message' => $e->getMessage()
             ], 500);
         }
     }
 
+///عرض المنتجات مع السائق
+    public function myStock()
+    {
+        $user = auth()->user();
 
+        $items = CarStockItem::with([
+            'batch.finishedProduct'
+        ])
+            ->whereHas('carStock', function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })
+            ->get();
 
+        // 🔥 grouping حسب المنتج
+        $grouped = $items->groupBy('finished_product_id');
 
+        $result = $grouped->map(function ($items, $productId) {
 
+            $first = $items->first();
 
+            return [
+                'product_id' => $productId,
+                'name' => $first->batch->finishedProduct->name ?? null,
+                'size' => $first->batch->finishedProduct->size ?? null,
+
+                'total_remaining' => $items->sum('remaining_quantity'),
+
+                'batches' => $items->map(function ($item) {
+                    return [
+                        'batch_id' => $item->finished_product_batch_id,
+                        'batch_number' => $item->batch->batch_number ?? null,
+                        'remaining_quantity' => $item->remaining_quantity,
+                    ];
+                })->values()
+            ];
+        })->values();
+
+        return response()->json([
+            'data' => $result
+        ]);
+    }
 
 
 }

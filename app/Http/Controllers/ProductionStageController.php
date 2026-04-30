@@ -54,31 +54,40 @@ class ProductionStageController extends Controller
     تأكيد استلام المواد
     =========================
     */
-    public function confirmMaterials($orderId)
+        public function confirmMaterials($orderId)
     {
+        $task = \App\Models\RawMaterialTask::where('route', 'send_to_production')
+            ->where('status', 'completed')
+            ->whereJsonContains('details->production_order_id', $orderId)
+            ->first();
+
+        if (!$task) {
+            return response()->json([
+                'message' => 'لم يتم إرسال المواد لهذا الطلب بعد'
+            ], 422);
+        }
+
         $order = $this->orderService->updateStatus($orderId, 'materials_received');
 
         return response()->json([
-            'message' => 'تم تأكيد استلام المواد الأولية',
+            'message' => 'تم تأكيد استلام المواد',
             'order' => $order
         ]);
     }
-
     /*
     =========================
     بدء الإنتاج
     =========================
-    */
-    public function startOrder($orderId)
-    {
-        $result = $this->stageService->startOrder($orderId);
+    */public function startOrder($orderId)
+{
+    $result = $this->stageService->startOrder($orderId);
 
-        if ($result['error']) {
-            return response()->json($result, $result['status_code']);
-        }
-
-        return response()->json($result, 200);
+    if ($result['error'] ?? false) {
+        return response()->json($result, $result['status_code'] ?? 422);
     }
+
+    return response()->json($result, 200);
+}
 
     /*
     =========================

@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\FinishedProductReceiveController;
+use App\Http\Controllers\ReturnController;
+use App\Http\Controllers\SalesReportController;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\AuthController;
@@ -302,13 +304,29 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
 
         //عرض المهام اليومية لسائق معين
         Route::get('/driver/{driverId}/today', [DistributionTaskController::class, 'driverTodayTasks']);
+
+
+//عرض مخزون سائق معين
+
+        Route::get('/driver-stock/{driverId}', [ReturnController::class, 'driverStock']);
+
+       //عرض البصاعة المرتجعة والمستلمة
+        Route::get('/driver-stock-report/{driverId}', [ReturnController::class, 'driverStockReport']);
+
+//عرض المبيعات اليومية لسائق معين
+                Route::post('/reports/daily-sales', [SalesReportController::class, 'daily']);
+
+                //عرض المبيعات الشهرية لسائق معين
+        Route::post('/reports/monthly-sales', [SalesReportController::class, 'monthly']);
+
+
     });
 
 //////////////////////////////////////////////////////////
 // Driver
 //////////////////////////////////////////////////////////
 
-Route::middleware(['auth:sanctum', 'role:driver'])->group(function () {
+Route::middleware(['auth:sanctum','role:admin|super_admin|driver' ])->group(function () {
 
     // عرض المهمة الحالية
     Route::get('/my-tasks/today', [DistributionTaskController::class, 'myTodayTask']);
@@ -336,4 +354,21 @@ Route::middleware(['auth:sanctum', 'role:driver'])->group(function () {
     Route::post('/sales/{saleId}/items', [SaleController::class, 'addItems']);
 
     Route::post('/sales/{saleId}/confirm', [InvoiceController::class, 'confirmSale']);
+///عرض المنتجات مع السائق
+
+    Route::get('/my-stock', [SaleController::class, 'myStock']);
+
+    //عرض المحلات للسائق
+
+    Route::get('/my-stores', [DistributionTaskController::class, 'myStores']);
+//مرتجعات
+    Route::post('/car-stock/return', [ReturnController::class, 'autoReturn']);
+
+    //عرض مخزون السيارة
+    Route::get('/car-stock', [ReturnController::class, 'myCarStock']);
+
+    //عرض الفواتير
+    Route::get('/invoices', [InvoiceController::class, 'index']);
+    // عرض فاتورة واحدة
+    Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
 });
