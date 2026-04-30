@@ -138,6 +138,7 @@ class FinishedProductWarehouseService
             return [
                 'id' => $product->id,
                 'name' => $product->name,
+                'size' => $product->size,
                 'unit' => $product->unit,
                 'total_batches' => $product->batches->count(),
                 'total_quantity' => $product->batches->sum('quantity'),
