@@ -13,46 +13,39 @@ class FinishedProductWarehouseService
      */
     public function getAllFinishedProducts()
     {
-        $products = FinishedProduct::with(['batches' => function ($query) {
-            $query->where('remaining_quantity', '>', 0)
-                  ->orderBy('production_date', 'asc');
-        }])->get();
+    $products = FinishedProduct::with(['batches' => function ($query) {
+        $query->orderBy('production_date', 'asc');
+    }])->get();
 
-        $formatted = $products->map(function ($product) {
-            $batches = $product->batches;
+    $formatted = $products->map(function ($product) {
+        $batches = $product->batches;
 
-            if ($batches->isEmpty()) {
-                return null;
-            }
-
-            $batchDetails = $batches->map(function ($batch) {
-                return $this->formatBatchDetails($batch);
-            });
-
-            return [
-                'id' => $product->id,
-                'name' => $product->name,
-                'size' => $product->size,
-                'unit' => $product->unit,
-                'total_quantity' => $batches->sum('quantity'),
-                'total_remaining_quantity' => $batches->sum('remaining_quantity'),
-                'total_batches' => $batches->count(),
-                'batches' => $batchDetails,
-            ];
-        })->filter(function ($product) {
-            return $product !== null;
-        })->values();
+        $batchDetails = $batches->map(function ($batch) {
+            return $this->formatBatchDetails($batch);
+        });
 
         return [
-            'data' => $formatted,
-            'summary' => [
-                'total_products' => $formatted->count(),
-                'total_quantity' => $formatted->sum('total_quantity'),
-                'total_remaining_quantity' => $formatted->sum('total_remaining_quantity'),
-                'total_batches' => $formatted->sum('total_batches'),
-            ]
+            'id' => $product->id,
+            'name' => $product->name,
+            'size' => $product->size,
+            'unit' => $product->unit,
+            'total_quantity' => $batches->sum('quantity'),
+            'total_remaining_quantity' => $batches->sum('remaining_quantity'),
+            'total_batches' => $batches->count(),
+            'batches' => $batchDetails,
         ];
-    }
+    });
+
+    return [
+        'data' => $formatted,
+        'summary' => [
+            'total_products' => $formatted->count(),
+            'total_quantity' => $formatted->sum('total_quantity'),
+            'total_remaining_quantity' => $formatted->sum('total_remaining_quantity'),
+            'total_batches' => $formatted->sum('total_batches'),
+        ]
+    ];
+}
 
     /**
      * Get product details by ID
