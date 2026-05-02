@@ -13,95 +13,28 @@ use Illuminate\Support\Facades\DB;
 
 class SaleController extends Controller
 {
-    public function createSale(Request $request)
+    public function createSale(Request $request, \App\Services\SaleService $service)
     {
         $request->validate([
             'store_id' => 'required|exists:stores,id',
             'task_id' => 'required|exists:distribution_tasks,id',
         ]);
 
-        $task = DistributionTask::find($request->task_id);
-        app(\App\Services\TaskTimeGuard::class)->check($task);
-        $store = Store::find($request->store_id);
-        $user = auth()->user();
-
-        if (!$task || !$store) {
-            return response()->json(['message' => 'Invalid data'], 404);
-        }
-
-        $pivot = $task->stores()
-            ->where('store_id', $store->id)
-            ->first();
-
-        if (!$pivot) {
-            return response()->json(['message' => 'Store not in task'], 400);
-        }
-
-        // Retail لازم scan
-        if ($store->type === 'retail' && !$pivot->pivot->visited) {
-            return response()->json(['message' => 'Scan store first'], 400);
-        }
-
-        $sale = Sale::firstOrCreate(
-            [
-                'store_id' => $store->id,
-                'distribution_task_id' => $task->id,
-                'user_id' => $user->id,
-                'status' => 'draft'
-            ],
-            [
-                'date' => now(),
-                'total_amount' => 0
-            ]
+        $result = $service->createSale(
+            auth()->user(),
+            $request->store_id,
+            $request->task_id
         );
 
-        return response()->json([
-            'sale_id' => $sale->id
-        ]);
+        if (!$result['ok']) {
+            return response()->json([
+                'message' => $result['message']
+            ], $result['code']);
+        }
+
+        return response()->json($result['data']);
     }
-
-    public function allocateFromCarStock($userId, $productId, $quantity)
-    {
-        return DB::transaction(function () use ($userId, $productId, $quantity) {
-
-            $items = CarStockItem::whereHas('carStock', function ($q) use ($userId) {
-                $q->where('user_id', $userId);
-            })
-                ->where('finished_product_id', $productId)
-                ->where('remaining_quantity', '>', 0)
-                ->orderBy('created_at', 'asc')
-                ->lockForUpdate()
-                ->get();
-
-            $remaining = $quantity;
-            $allocations = [];
-
-            foreach ($items as $item) {
-
-                if ($remaining <= 0) break;
-
-                $take = min($item->remaining_quantity, $remaining);
-
-                $item->decrement('remaining_quantity', $take);
-
-                $allocations[] = [
-                    'car_stock_item_id' => $item->id,
-                    'finished_product_batch_id' => $item->finished_product_batch_id,
-                    'quantity' => $take
-                ];
-
-                $remaining -= $take;
-            }
-
-            if ($remaining > 0) {
-                throw new \Exception("Not enough stock for product {$productId}");
-            }
-
-            return $allocations;
-        });
-    }
-
-    public function addItems(Request $request, $saleId)
+    public function addItems(Request $request, $saleId, \App\Services\SaleService $service)
     {
         $request->validate([
             'items' => 'required|array',
@@ -110,105 +43,31 @@ class SaleController extends Controller
             'items.*.price' => 'required|numeric|min:0',
         ]);
 
-        $sale = Sale::findOrFail($saleId);
+        $sale = \App\Models\Sale::findOrFail($saleId);
 
-// ✅ IMPORTANT: منع أي إضافة خارج وقت المهمة
-        $task = $sale->distributionTask;
-        app(\App\Services\TaskTimeGuard::class)->check($task);
+        $result = $service->addItems(
+            $sale,
+            $request->items,
+            auth()->id()
+        );
 
-        if ($sale->status === 'confirmed') {
-            return response()->json(['message' => 'Cannot modify confirmed sale'], 400);
+        if (!$result['ok']) {
+            return response()->json(['message' => $result['message']], 400);
         }
-
-        DB::beginTransaction();
-
-        try {
-            $total = 0;
-
-            foreach ($request->items as $item) {
-
-                // 🔥 FIFO من السيارة
-                $allocations = $this->allocateFromCarStock(
-                    auth()->id(),
-                    $item['finished_product_id'],
-                    $item['quantity']
-                );
-
-                foreach ($allocations as $alloc) {
-
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'car_stock_item_id' => $alloc['car_stock_item_id'],
-                        'finished_product_batch_id' => $alloc['finished_product_batch_id'],
-                        'quantity' => $alloc['quantity'],
-                        'price' => $item['price'],
-                    ]);
-
-                    $total += $alloc['quantity'] * $item['price'];
-                }
-            }
-
-            $sale->update([
-                'total_amount' => $sale->total_amount + $total
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Items added successfully',
-                'total_added' => $total
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-///عرض المنتجات مع السائق
-    public function myStock()
-    {
-        $user = auth()->user();
-
-        $items = CarStockItem::with([
-            'batch.finishedProduct'
-        ])
-            ->whereHas('carStock', function ($q) use ($user) {
-                $q->where('user_id', $user->id);
-            })
-            ->get();
-
-        // 🔥 grouping حسب المنتج
-        $grouped = $items->groupBy('finished_product_id');
-
-        $result = $grouped->map(function ($items, $productId) {
-
-            $first = $items->first();
-
-            return [
-                'product_id' => $productId,
-                'name' => $first->batch->finishedProduct->name ?? null,
-                'size' => $first->batch->finishedProduct->size ?? null,
-
-                'total_remaining' => $items->sum('remaining_quantity'),
-
-                'batches' => $items->map(function ($item) {
-                    return [
-                        'batch_id' => $item->finished_product_batch_id,
-                        'batch_number' => $item->batch->batch_number ?? null,
-                        'remaining_quantity' => $item->remaining_quantity,
-                    ];
-                })->values()
-            ];
-        })->values();
 
         return response()->json([
-            'data' => $result
+            'message' => 'Items added successfully',
+            'total_added' => $result['total_added']
         ]);
     }
+    public function myStock(\App\Services\SaleService $service)
+    {
+        return response()->json([
+            'data' => $service->myStock(auth()->user())
+        ]);
+    }
+
+
 
 
 }

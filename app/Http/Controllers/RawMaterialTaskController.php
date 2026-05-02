@@ -252,48 +252,65 @@ class RawMaterialTaskController extends Controller
         $items = $task->details['items'] ?? [];
 
         if (empty($items)) {
-            return response()->json(['message' => 'No items defined for this send task'], 422);
+            return response()->json(['message' => 'No items defined'], 422);
         }
 
         $createdAllocations = [];
 
         try {
             DB::transaction(function () use ($items, $task, &$createdAllocations) {
+
                 foreach ($items as $it) {
+
                     $rawMaterialId = $it['raw_material_id'];
                     $qty = $it['quantity'];
 
-                    $allocs = $this->inventory->allocateFifo($rawMaterialId, $qty);
+                    // 🔥 قراءة فقط بدون خصم
+                    $batches = RawMaterialBatch::where('raw_material_id', $rawMaterialId)
+                        ->where('remaining_quantity', '>', 0)
+                        ->orderBy('received_at', 'asc')
+                        ->get();
 
-                    $allocatedQty = array_sum(array_map(fn($a) => $a['quantity'], $allocs));
-                    if ($allocatedQty < $qty) {
-                        throw new \Exception("Insufficient inventory for raw material id {$rawMaterialId}: requested {$qty}, allocated {$allocatedQty}");
-                    }
+                    foreach ($batches as $batch) {
 
-                    foreach ($allocs as $alloc) {
-                        // تخزين التخصيص مباشرة ضمن المهمة، بدون أمر إنتاج
+                        if ($qty <= 0) break;
+
+                        $take = min($batch->remaining_quantity, $qty);
+
                         $createdAllocations[] = [
                             'raw_material_id' => $rawMaterialId,
-                            'batch_id' => $alloc['batch_id'],
-                            'quantity' => $alloc['quantity']
+                            'batch_id' => $batch->id,
+                            'quantity' => $take
                         ];
+
+                        $qty -= $take;
+                    }
+
+                    if ($qty > 0) {
+                        throw new \Exception("Not enough stock for raw material {$rawMaterialId}");
                     }
                 }
 
-                $task->status = 'completed';
-                $task->sent_at = now();
                 $details = $task->details ?? [];
                 $details['sent_allocations'] = $createdAllocations;
+
                 unset($details['items']);
+
                 $task->details = $details;
+                $task->status = 'completed';
+                $task->sent_at = now();
                 $task->save();
             });
+
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Allocation failed', 'error' => $e->getMessage()], 422);
+            return response()->json([
+                'message' => 'Allocation failed',
+                'error' => $e->getMessage()
+            ], 422);
         }
 
         return response()->json([
-            'message' => 'Materials sent successfully',
+            'message' => 'Materials prepared (no stock deducted)',
             'allocations' => $createdAllocations
         ]);
     }
@@ -406,46 +423,48 @@ class RawMaterialTaskController extends Controller
         return response()->json(['inventory' => $summary]);
     }
 
-
     public function confirmReceiveinp(Request $request, $id)
     {
-        /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // البحث عن مهمة إرسال المواد إلى الإنتاج
         $task = RawMaterialTask::where('id', $id)
             ->where('route', 'send_to_production')
             ->firstOrFail();
 
-        // التحقق من حالة المهمة: يجب أن يكون أمين المستودع أكمل الإرسال أو تم التأكيد مسبقاً
         $details = $task->details ?? [];
-        if (($task->status !== 'completed' && $task->status !== 'received_by_production') || empty($details['sent_allocations'])) {
+
+        if (($task->status !== 'completed' && $task->status !== 'received_by_production')
+            || empty($details['sent_allocations'])) {
             return response()->json([
-                'message' => 'Task not ready for production receiving. Warehouse must complete sending first.'
+                'message' => 'Task not ready'
             ], 400);
         }
 
-        // التأكد إن المواد لم تُستلم مسبقاً
         if (!empty($details['production_received_at'])) {
             return response()->json([
-                'message' => 'Materials already confirmed as received by production'
+                'message' => 'Already received'
             ], 400);
         }
 
-        // تحديث المهمة داخل معاملة قاعدة بيانات لضمان atomicity
         DB::transaction(function () use ($task, $user, &$details) {
-            // تحديث تفاصيل المهمة بتاريخ وموظف الاستلام
+
+            // 🔥 الخصم الحقيقي هنا
+            foreach ($details['sent_allocations'] as $alloc) {
+
+                RawMaterialBatch::where('id', $alloc['batch_id'])
+                    ->decrement('remaining_quantity', $alloc['quantity']);
+            }
+
             $details['production_received_at'] = now();
             $details['production_received_by'] = $user->id;
-            $task->details = $details;
 
-            // تحديث حالة المهمة
+            $task->details = $details;
             $task->status = 'received_by_production';
             $task->save();
         });
 
         return response()->json([
-            'message' => 'تم تأكيد استلام المواد من قبل الإنتاج',
+            'message' => 'Materials received and deducted from stock',
             'task' => $task
         ]);
     }

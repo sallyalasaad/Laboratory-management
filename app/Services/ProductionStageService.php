@@ -26,13 +26,14 @@ class ProductionStageService
             return ['error' => true, 'message' => 'تم رفض الطلب ولا يمكن بدء الإنتاج', 'status_code' => 422];
         }
 
-        // ✅ تحقق من وجود مواد فقط
-        $hasStock = \App\Models\RawMaterialBatch::where('remaining_quantity', '>', 0)->exists();
+        // ✅ تحقق من أن الإنتاج استلم مواد
+        $hasStock = \App\Models\RawMaterialTask::where('status', 'received_by_production')
+            ->exists();
 
         if (!$hasStock) {
             return [
                 'error' => true,
-                'message' => 'لا يمكن بدء الإنتاج: لا يوجد مواد أولية في المستودع',
+                'message' => 'لا يمكن بدء الإنتاج: لم يتم استلام مواد أولية من المستودع',
                 'status_code' => 422
             ];
         }
