@@ -45,25 +45,6 @@ class Sale extends Model
 
 
 
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::saving(function ($sale) {
-
-            if (!$sale->distributionTask) return;
-
-            $task = $sale->distributionTask;
-
-            $now = now();
-            $start = \Carbon\Carbon::parse($task->date.' '.$task->start_time);
-            $end   = \Carbon\Carbon::parse($task->date.' '.$task->end_time);
-
-            if (!$now->between($start, $end)) {
-                throw new \Exception("Sale blocked outside task time");
-            }
-        });
-    }
 
 
 

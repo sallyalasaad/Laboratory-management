@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\InvoiceService;
 use App\Services\TaskTimeGuard;
 use App\Services\VisitService;
+use Illuminate\Support\Facades\DB;
 
 class InvoiceController extends Controller
 {

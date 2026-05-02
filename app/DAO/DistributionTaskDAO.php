@@ -4,22 +4,22 @@ namespace App\DAO;
 use App\Models\DistributionTask;
 use App\Models\Store;
 use App\Models\User;
+use Carbon\Carbon;
 
 class DistributionTaskDAO
+{public function checkOverlap($userId, $newStart, $newEnd)
 {
-    public function checkOverlap($userId, $date, $newStart, $newEnd)
-    {
-        return DistributionTask::where('user_id', $userId)
-            ->whereDate('date', $date)
-            ->get()
-            ->first(function ($task) use ($newStart, $newEnd) {
+    return DistributionTask::where('user_id', $userId)
+        ->whereIn('status', ['pending', 'in_progress'])
+        ->get()
+        ->first(function ($task) use ($newStart, $newEnd) {
 
-                $taskStart = \Carbon\Carbon::parse($task->date.' '.$task->start_time)->subHour();
-                $taskEnd   = \Carbon\Carbon::parse($task->date.' '.$task->end_time);
+            $taskStart = Carbon::parse($task->date.' '.$task->start_time)->subHour();
+            $taskEnd   = Carbon::parse($task->date.' '.$task->end_time);
 
-                return $newStart < $taskEnd && $newEnd > $taskStart;
-            });
-    }
+            return $newStart < $taskEnd && $newEnd > $taskStart;
+        });
+}
 
     public function createTask($driverId, $data)
     {

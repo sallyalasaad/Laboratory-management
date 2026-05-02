@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services;
 
 use Carbon\Carbon;
@@ -14,8 +13,11 @@ class TaskTimeGuard
         $start = Carbon::parse($task->date . ' ' . $task->start_time);
         $end   = Carbon::parse($task->date . ' ' . $task->end_time);
 
-        // ❌ قبل وقت المهمة
-        if ($now->lt($start)) {
+        // 🔥 بداية السماح = قبل ساعة من البداية
+        $allowedStart = $start->copy()->subHour();
+
+        // ❌ قبل وقت السماح (مش قبل start)
+        if ($now->lt($allowedStart)) {
             throw new Exception('Task not started yet');
         }
 
@@ -24,4 +26,8 @@ class TaskTimeGuard
             throw new Exception('Task expired');
         }
     }
+
+
+
+
 }

@@ -12,75 +12,101 @@ class DistributionTaskService
     public function __construct(DistributionTaskDAO $dao)
     {
         $this->dao = $dao;
+    }public function createTask($request)
+{
+    $data = $request->validate([
+        'user_id'    => 'required|exists:users,id',
+        'region_id'  => 'required|exists:regions,id',
+        'date'       => 'required|date',
+        'start_time' => 'required',
+        'end_time'   => 'required',
+    ]);
+
+    // التأكد أن المستخدم سائق
+    $driver = User::role('driver')
+        ->where('id', $data['user_id'])
+        ->first();
+
+    if (!$driver) {
+        return response()->json([
+            'message' => 'Selected user is not a driver'
+        ], 422);
     }
 
-    public function createTask($request)
-    {
-        $data = $request->validate([
-            'user_id'    => 'required|exists:users,id',
-            'region_id'  => 'required|exists:regions,id',
-            'date'       => 'required|date',
-            'start_time' => 'required',
-            'end_time'   => 'required',
-        ]);
+    // تحويل الوقت بشكل مضبوط
+    $start = \Carbon\Carbon::createFromFormat(
+        'Y-m-d H:i',
+        $data['date'].' '.$data['start_time']
+    );
 
-        // تحقق أن المستخدم سائق
-        $driver = User::role('driver')
-            ->where('id', $data['user_id'])
-            ->first();
+    $end = \Carbon\Carbon::createFromFormat(
+        'Y-m-d H:i',
+        $data['date'].' '.$data['end_time']
+    );
 
-        if (!$driver) {
-            return response()->json([
-                'message' => 'Selected user is not a driver'
-            ], 422);
-        }
+    $now = now();
 
-        // 🔥 حساب البداية الفعلية (قبل ساعة)
-        $newStart = \Carbon\Carbon::parse($data['date'].' '.$data['start_time'])->subHour();
-        $newEnd   = \Carbon\Carbon::parse($data['date'].' '.$data['end_time']);
-
-        // 🔥 منع التداخل الحقيقي
-        $exists = $this->dao->checkOverlap($data['user_id'], $data['date'], $newStart, $newEnd);
-
-        if ($exists) {
-            return response()->json([
-                'message' => 'هذا السائق لديه مهمة ضمن نفس الوقت (مع الساعة المبكرة)'
-            ], 422);
-        }
-
-        DB::beginTransaction();
-
-        try {
-
-            $task = $this->dao->createTask($driver->id, $data);
-
-            $stores = $this->dao->getRegionStores($data['region_id']);
-
-            $attachData = $stores->mapWithKeys(fn ($store) => [
-                $store->id => [
-                    'visited'    => false,
-                    'visited_at' => null,
-                ]
-            ])->toArray();
-
-            $this->dao->attachStores($task, $attachData);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Mission created successfully',
-                'task_id' => $task->id,
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'message' => 'Error creating mission',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    // 🔴 منع إنشاء مهمة تبدأ في الماضي
+    if ($start->lt($now)) {
+        return response()->json([
+            'message' => 'لا يمكن إنشاء مهمة تبدأ في وقت سابق للوقت الحالي'
+        ], 422);
     }
+
+    // 🔴 منع وقت غير منطقي
+    if ($end->lte($start)) {
+        return response()->json([
+            'message' => 'وقت النهاية يجب أن يكون بعد وقت البداية'
+        ], 422);
+    }
+
+    // 🔥 التحقق من التداخل (بدون subHour هنا)
+    $exists = $this->dao->checkOverlap(
+        $data['user_id'],
+        $start,
+        $end
+    );
+
+    if ($exists) {
+        return response()->json([
+            'message' => 'يوجد تداخل في المهمة'
+        ], 422);
+    }
+
+    DB::beginTransaction();
+
+    try {
+
+        $task = $this->dao->createTask($driver->id, $data);
+
+        $stores = $this->dao->getRegionStores($data['region_id']);
+
+        $attach = $stores->mapWithKeys(fn ($s) => [
+            $s->id => [
+                'visited' => false,
+                'visited_at' => null
+            ]
+        ])->toArray();
+
+        $this->dao->attachStores($task, $attach);
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Mission created successfully',
+            'task_id' => $task->id
+        ], 201);
+
+    } catch (\Exception $e) {
+
+        DB::rollBack();
+
+        return response()->json([
+            'message' => 'Error creating mission',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
     public function getDrivers()
     {
         return $this->dao->getDrivers();
@@ -342,103 +368,43 @@ class DistributionTaskService
             'current_task' => $currentTask,
             'message' => $currentTask ? null : 'No current task'
         ];
+    }public function startTask($id, $request)
+{
+    $task = $this->dao->getTaskForDriver($id, $request->user()->id);
+
+    $now = now();
+
+    $start = \Carbon\Carbon::parse($task->date.' '.$task->start_time);
+    $allowed = $start->copy()->subHour();
+    $end = \Carbon\Carbon::parse($task->date.' '.$task->end_time);
+
+    if ($now->lt($allowed)) {
+        return ['ok'=>false,'code'=>400,'message'=>'Too early'];
     }
 
-    public function startTask($id, $request)
-    {
-        $task = $this->dao->getTaskForDriver($id, $request->user()->id);
-
-        $now = now();
-
-        $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
-        $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
-
-        // 🔥 السماح قبل ساعة
-        $allowedStart = $start->copy()->subHour();
-
-        if ($now->lt($allowedStart)) {
-            return [
-                'ok' => false,
-                'code' => 400,
-                'message' => 'Too early'
-            ];
-        }
-
-        if ($now->gt($end)) {
-            return [
-                'ok' => false,
-                'code' => 400,
-                'message' => 'Task expired'
-            ];
-        }
-
-        if ($task->status === 'in_progress') {
-            return [
-                'ok' => false,
-                'code' => 400,
-                'message' => 'Task already started'
-            ];
-        }
-
-        $this->dao->updateTaskStatus($task, 'in_progress');
-
-        return [
-            'ok' => true,
-            'message' => 'Task started'
-        ];
+    if ($now->gt($end)) {
+        return ['ok'=>false,'code'=>400,'message'=>'Expired'];
     }
 
-    public function completeTask($id, $request)
-    {
-        $task = $this->dao->getTaskForDriver($id, $request->user()->id);
-
-        $now = now();
-        $end = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
-
-        if (!in_array($task->status, ['in_progress', 'ready_to_complete'])) {
-            return [
-                'ok' => false,
-                'code' => 400,
-                'message' => 'Task not allowed to complete'
-            ];
-        }
-
-        if ($now->gt($end)) {
-            $this->dao->updateTaskStatus($task, 'failed');
-
-            return [
-                'ok' => false,
-                'code' => 400,
-                'message' => 'Task expired and marked as failed'
-            ];
-        }
-
-        // ✅ تحقق من الزيارات
-        if ($this->dao->taskHasUnvisitedStores($task)) {
-            return [
-                'ok' => false,
-                'code' => 400,
-                'message' => 'You must visit all stores before completing the task'
-            ];
-        }
-
-        // ✅ تحقق من المبيعات
-        if (!$this->dao->taskHasConfirmedSales($task->id)) {
-            return [
-                'ok' => false,
-                'code' => 400,
-                'message' => 'لا يمكن إنهاء المهمة بدون مبيعات'
-            ];
-        }
-
-        $this->dao->updateTaskStatus($task, 'completed');
-
-        return [
-            'ok' => true,
-            'message' => 'Task completed'
-        ];
+    if ($task->status === 'in_progress') {
+        return ['ok'=>false,'code'=>400,'message'=>'Already started'];
     }
 
+    $this->dao->updateTaskStatus($task, 'in_progress');
+
+    return ['ok'=>true,'message'=>'Started'];
+}public function completeTask($id, $request)
+{
+    $task = $this->dao->getTaskForDriver($id, $request->user()->id);
+
+    if ($task->status !== 'in_progress') {
+        return ['ok'=>false,'code'=>400,'message'=>'Not allowed'];
+    }
+
+    $this->dao->updateTaskStatus($task, 'completed');
+
+    return ['ok'=>true,'message'=>'Completed'];
+}
     public function myDailyTasks($user)
     {
         $tasks = $this->dao->getMyDailyTasks($user->id);
