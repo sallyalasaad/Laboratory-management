@@ -324,22 +324,34 @@ class DistributionTaskService
 
             $allowedStart = $start->copy()->subHour();
 
-            // ❌ لا تعديل على الداتا داخل العرض (READ ONLY)
-
-            // يمكن فقط حساب الحالة بشكل مؤقت بدون حفظها
+            // الحالة من الداتابيس فقط كبداية
             $computedStatus = $task->status;
 
+            // ❌ انتهت
             if ($now->gt($end) && $task->status !== 'completed') {
                 $computedStatus = 'failed';
             }
 
-            if ($now->between($allowedStart, $end) && $task->status === 'pending') {
+            // ⛔ قبل وقت السماح
+            elseif ($now->lt($allowedStart)) {
+                $computedStatus = 'pending';
+            }
+
+            // ⏳ داخل وقت السماح أو بعده لكن بدون تشغيل تلقائي
+            elseif ($now->between($allowedStart, $end)) {
+                if ($task->status === 'pending') {
+                    $computedStatus = 'pending'; // مهم: لا تحولها in_progress
+                }
+            }
+
+            // ✔ فقط إذا تم تشغيلها فعلياً
+            elseif ($task->status === 'in_progress') {
                 $computedStatus = 'in_progress';
             }
 
             if (
-                $now->between($allowedStart, $end) &&
-                in_array($task->status, ['pending', 'in_progress'])
+                $now->between($allowedStart, $end) ||
+                $task->status === 'in_progress'
             ) {
                 $currentTask = [
                     'id' => $task->id,

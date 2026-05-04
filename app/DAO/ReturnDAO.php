@@ -39,14 +39,15 @@ class ReturnDAO
             ->orderBy('created_at', 'asc')
             ->get();
     }
-
-
     public function getDriverStock($driverId)
     {
         return CarStockItem::whereHas('carStock', function ($q) use ($driverId) {
             $q->where('user_id', $driverId);
         })
-            ->with(['carStock', 'batch'])
+            ->with([
+                'carStock',
+                'batch.finishedProduct' // 🔥 هذا هو المهم
+            ])
             ->get();
     }
 

@@ -54,46 +54,55 @@ class ReturnService
                 'message' => 'All stock returned successfully'
             ];
         });
-    }
-    public function getCarStock($userId)
-    {
-        $items = $this->dao->getCarStock($userId);
+    }public function getCarStock($userId)
+{
+    $items = $this->dao->getCarStock($userId);
 
-        return [
-            'driver_id' => $userId,
-            'stock' => $items->map(function ($item) {
-                return [
-                    'car_stock_item_id' => $item->id,
-                    'finished_product_id' => $item->finished_product_id,
-                    'batch_id' => $item->finished_product_batch_id,
+    return [
+        'driver_id' => $userId,
+        'stock' => $items->map(function ($item) {
 
-                    // ✅ أضف هذا السطر
-                    'product_name' => $item->batch?->finishedProduct?->name,
+            $product = $item->batch?->finishedProduct;
 
-                    'quantity' => (float) $item->quantity,
-                    'remaining_quantity' => (float) $item->remaining_quantity,
-                ];
-            })
-        ];
-    }
+            return [
+                'car_stock_item_id' => $item->id,
+                'finished_product_id' => $item->finished_product_id,
+                'batch_id' => $item->finished_product_batch_id,
 
+                // بيانات المنتج
+                'product_name' => $product?->name,
+                'size' => $product?->size,
+                'unit' => $product?->unit,
 
+                'quantity' => (float) $item->quantity,
+                'remaining_quantity' => (float) $item->remaining_quantity,
+            ];
+        })
+    ];
+}
 
     public function getDriverStock($driverId)
     {
         $stock = $this->dao->getDriverStock($driverId);
 
         return $stock->map(function ($item) {
+
+            $product = $item->batch?->finishedProduct;
+
             return [
                 'car_stock_item_id' => $item->id,
                 'finished_product_id' => $item->finished_product_id,
                 'batch_id' => $item->finished_product_batch_id,
-                'quantity' => $item->quantity,
-                'remaining_quantity' => $item->remaining_quantity,
+
+                'product_name' => $product?->name,
+                'size' => $product?->size,
+                'unit' => $product?->unit,
+
+                'quantity' => (float) $item->quantity,
+                'remaining_quantity' => (float) $item->remaining_quantity,
             ];
         });
     }
-
 
     public function getDriverReport($driverId)
     {
