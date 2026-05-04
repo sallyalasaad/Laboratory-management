@@ -11,28 +11,31 @@ class FinishedProductBatchController extends Controller
     public function __construct(FinishedProductBatchService $service)
     {
         $this->service = $service;
-    }
-    public function create(Request $request)
-    {
-        $request->validate([
-            'finished_product_id' => 'required|integer|exists:finished_products,id',
-            'production_order_id' => 'required|integer|exists:production_orders,id',
-            'quantity' => 'required|numeric|min:0.01',
-            'production_date' => 'required|date'
-        ]);
+    }public function create(Request $request)
+{
+    $request->validate([
+        'finished_product_id' => 'required|integer|exists:finished_products,id',
+        'production_order_id' => 'required|integer|exists:production_orders,id',
+        'quantity' => 'required|numeric|min:0.01',
+        'production_date' => 'required|date',
+        'expiry_type' => 'required|in:month,year',
+        'expiry_value' => 'required|integer|min:1'
+    ]);
 
-        $batch = $this->service->createBatch(
-            $request->finished_product_id,
-            $request->production_order_id,
-            $request->quantity,
-            $request->production_date
-        );
+    $batch = $this->service->createBatch(
+        $request->finished_product_id,
+        $request->production_order_id,
+        $request->quantity,
+        $request->production_date,
+        $request->expiry_type,
+        $request->expiry_value
+    );
 
-        return response()->json([
-            'message' => 'Batch created',
-            'batch' => $batch
-        ], 201);
-    }
+    return response()->json([
+        'message' => 'Batch created',
+        'batch' => $batch
+    ], 201);
+}
 
     public function list1($orderId)
     {

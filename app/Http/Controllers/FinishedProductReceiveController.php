@@ -83,5 +83,52 @@ class FinishedProductReceiveController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
+    }public function showReceiveItems($taskId, Request $request)
+{
+    $task = FinishedProductTask::where('id', $taskId)
+        ->where('driver_id', $request->user()->id)
+        ->firstOrFail();
+
+    if ($task->status !== 'sent') {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Task not ready for receive'
+        ], 400);
     }
+
+    $allocations = collect($task->details['allocations'] ?? []);
+
+    $batches = \App\Models\FinishedProductBatch::with('finishedProduct')
+        ->whereIn('id', $allocations->pluck('batch_id'))
+        ->get()
+        ->keyBy('id');
+
+    $items = $allocations->map(function ($item) use ($batches) {
+
+        $batch = $batches[$item['batch_id']] ?? null;
+
+        return [
+            'product_name' => $batch?->finishedProduct?->name,
+            'size' => $batch?->finishedProduct?->size,
+            'quantity' => $item['quantity'],
+            'batch_number' => $batch?->batch_number,
+        ];
+    });
+
+    $date = $task->sent_at
+        ? \Carbon\Carbon::parse($task->sent_at)->format('Y-m-d')
+        : $task->created_at->format('Y-m-d');
+
+    return response()->json([
+        'ok' => true,
+        'task_id' => $task->id,
+        'date' => $date,
+        'groups' => [
+            [
+                'title' => "تأكيد استلام – " . $date,
+                'items' => $items->values()
+            ]
+        ]
+    ]);
+}
 }

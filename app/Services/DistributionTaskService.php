@@ -324,30 +324,30 @@ class DistributionTaskService
 
             $allowedStart = $start->copy()->subHour();
 
-            // 🔴 انتهى الوقت
+            // ❌ لا تعديل على الداتا داخل العرض (READ ONLY)
+
+            // يمكن فقط حساب الحالة بشكل مؤقت بدون حفظها
+            $computedStatus = $task->status;
+
             if ($now->gt($end) && $task->status !== 'completed') {
-                $task->update(['status' => 'failed']);
-                continue;
+                $computedStatus = 'failed';
             }
 
-            // 🟡 تحديث الحالة
             if ($now->between($allowedStart, $end) && $task->status === 'pending') {
-                $task->update(['status' => 'in_progress']);
+                $computedStatus = 'in_progress';
             }
 
-            // 🟢 المهمة الحالية
             if (
                 $now->between($allowedStart, $end) &&
                 in_array($task->status, ['pending', 'in_progress'])
             ) {
-
                 $currentTask = [
                     'id' => $task->id,
                     'region' => $task->region->name,
                     'region_lat' => $task->region->lat ?? null,
                     'region_lng' => $task->region->lng ?? null,
                     'time' => $task->start_time . ' - ' . $task->end_time,
-                    'status' => $task->status,
+                    'status' => $computedStatus,
 
                     'stores' => $task->stores->map(function ($store) {
                         return [
@@ -368,7 +368,13 @@ class DistributionTaskService
             'current_task' => $currentTask,
             'message' => $currentTask ? null : 'No current task'
         ];
-    }public function startTask($id, $request)
+    }
+
+
+
+
+
+public function startTask($id, $request)
 {
     $task = $this->dao->getTaskForDriver($id, $request->user()->id);
 
