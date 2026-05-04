@@ -373,7 +373,7 @@ Route::middleware(['auth:sanctum','role:admin|super_admin|driver' ])->group(func
     Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
     // عرض المواد لتأكيد استلامها من السائق
     Route::get(
-        '/finished-products/tasks/{taskId}/preview-receive',
+        '/finished-products/tasks/preview-receive',
         [FinishedProductReceiveController::class, 'showReceiveItems']
     );
 
