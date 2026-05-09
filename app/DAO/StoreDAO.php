@@ -12,13 +12,18 @@ class StoreDAO
     {
         return Store::where('barcode', $barcode)->first();
     }
-
     public function getActiveTask($userId)
     {
         return DistributionTask::where('user_id', $userId)
+
             ->whereDate('date', now()->toDateString())
+
             ->where('status', 'in_progress')
+
             ->with('region')
+
+            ->orderBy('start_time')
+
             ->first();
     }
 

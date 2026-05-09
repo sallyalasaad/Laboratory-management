@@ -5,27 +5,83 @@ use Carbon\Carbon;
 use Exception;
 
 class TaskTimeGuard
+{public function check($task): void
 {
-    public function check($task): void
-    {
-        $now = now();
+    $now = now();
 
-        $start = Carbon::parse($task->date . ' ' . $task->start_time);
-        $end   = Carbon::parse($task->date . ' ' . $task->end_time);
+    $start = Carbon::parse(
+        $task->date . ' ' . $task->start_time
+    );
 
-        // 🔥 بداية السماح = قبل ساعة من البداية
-        $allowedStart = $start->copy()->subHour();
+    $end = Carbon::parse(
+        $task->date . ' ' . $task->end_time
+    );
 
-        // ❌ قبل وقت السماح (مش قبل start)
-        if ($now->lt($allowedStart)) {
-            throw new Exception('Task not started yet');
-        }
+    /*
+    |--------------------------------------------------------------------------
+    | بداية السماح
+    |--------------------------------------------------------------------------
+    */
 
-        // ❌ بعد انتهاء المهمة
-        if ($now->gt($end)) {
-            throw new Exception('Task expired');
-        }
+    $allowedStart = $start->copy()->subHour();
+
+    /*
+    |--------------------------------------------------------------------------
+    | قبل وقت السماح
+    |--------------------------------------------------------------------------
+    */
+
+    if ($now->lt($allowedStart)) {
+
+        throw new Exception(
+            'Task not started yet'
+        );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | المهمة منتهية
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+    in_array(
+        $task->status,
+        ['completed', 'failed']
+    )
+    ) {
+
+        throw new Exception(
+            'Task already finished'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | انتهى الوقت
+    |--------------------------------------------------------------------------
+    */
+
+    if ($now->gte($end)) {
+
+        throw new Exception(
+            'Task expired'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | المهمة ليست قيد التنفيذ
+    |--------------------------------------------------------------------------
+    */
+
+    if ($task->status !== 'in_progress') {
+
+        throw new Exception(
+            'Task is not active'
+        );
+    }
+}
 
 
 

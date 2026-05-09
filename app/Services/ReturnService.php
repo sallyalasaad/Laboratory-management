@@ -5,6 +5,8 @@ namespace App\Services;
 use App\DAO\ReturnDAO;
 use App\Models\SaleItem;
 use Illuminate\Support\Facades\DB;
+use App\Models\FinishedProductBatch;
+
 
 class ReturnService
 {
@@ -109,7 +111,12 @@ class ReturnService
         $tasks = $this->dao->getDriverTasks($driverId);
         $carItems = $this->dao->getCarStockItems($driverId);
 
-        // 🔥 جمع المبيعات مرة واحدة (أسرع)
+        // 🔥 تحميل كل الباتشات مع المنتج مرة واحدة (أفضل أداء)
+        $batches = FinishedProductBatch::with('finishedProduct')
+            ->get()
+            ->keyBy('id');
+
+        // 🔥 تجميع المبيعات مرة واحدة
         $soldMap = SaleItem::selectRaw('car_stock_item_id, SUM(quantity) as total_sold')
             ->groupBy('car_stock_item_id')
             ->pluck('total_sold', 'car_stock_item_id');
@@ -127,32 +134,39 @@ class ReturnService
 
                 $remaining = $carItem->remaining_quantity ?? 0;
 
-                // ✅ المبيعات من sale_items
+                // 🔥 المبيعات
                 $sold = $carItem
                     ? ($soldMap[$carItem->id] ?? 0)
                     : 0;
 
-                // ✅ المرتجع الحقيقي
+                // 🔥 المرتجع
                 $returned = $receivedQty - $sold - $remaining;
+                if ($returned < 0) $returned = 0;
 
-                if ($returned < 0) {
-                    $returned = 0;
-                }
+                // 🔥 المنتج من الباتش
+                $batch = $batches[$batchId] ?? null;
+                $product = $batch?->finishedProduct;
 
                 $report[] = [
-                    'finished_product_id' => $alloc['finished_product_id'],
+                    'product' => [
+                        'id' => $product?->id,
+                        'name' => $product?->name,
+                        'size' => $product?->size,
+                        'unit' => $product?->unit,
+                    ],
+
                     'batch_id' => $batchId,
 
-                    // 📥
+                    // 📥 المستلم
                     'received_quantity' => (float) $receivedQty,
 
-                    // 🛒
+                    // 🛒 المباع
                     'sold_quantity' => (float) $sold,
 
-                    // 🚚
+                    // 🚚 المتبقي في السيارة
                     'remaining_in_car' => (float) $remaining,
 
-                    // 🔁
+                    // 🔁 المرتجع
                     'returned_to_warehouse' => (float) $returned,
                 ];
             }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\DistributionTaskService;
 use App\Services\InvoiceService;
 use App\Services\TaskTimeGuard;
 use App\Services\VisitService;
@@ -100,5 +101,30 @@ class InvoiceController extends Controller
                 ];
             })
         ]);
+    }public function daily($driverId)
+{
+    return response()->json(
+        $this->service->getDriverDailyInvoices($driverId)
+    );
+}
+
+    public function monthly($driverId, $month)
+    {
+        return response()->json(
+            $this->service->getDriverMonthlyInvoices($driverId, $month)
+        );
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
 }

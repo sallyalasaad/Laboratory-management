@@ -40,4 +40,26 @@ class InvoiceDAO
         return Invoice::with(['sale.store', 'sale.items'])
             ->find($id);
     }
+
+    public function getDriverDailySales($driverId)
+    {
+        return Sale::with(['store', 'items'])
+            ->where('user_id', $driverId)
+            ->whereDate('date', now()->toDateString())
+            ->get();
+    }
+
+    public function getDriverMonthlySales($driverId, $month)
+    {
+        return Sale::with(['store', 'items'])
+            ->where('user_id', $driverId)
+            ->whereMonth('date', $month)
+            ->get();
+    }
+
+
+
+
+
+
 }

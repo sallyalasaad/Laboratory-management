@@ -318,8 +318,10 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
 
                 //عرض المبيعات الشهرية لسائق معين
         Route::post('/reports/monthly-sales', [SalesReportController::class, 'monthly']);
-
-
+//عرض الفواتير اليومية لسائق معين
+        Route::get('/invoices/daily/{driverId}', [InvoiceController::class, 'daily']);
+//عرض الفواتير الشهرية لسائق معين
+        Route::get('/invoices/monthly/{driverId}/{month}', [InvoiceController::class, 'monthly']);
     });
 
 //////////////////////////////////////////////////////////

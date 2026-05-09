@@ -9,22 +9,74 @@ use Carbon\Carbon;
 class UpdateTaskStatus extends Command
 {
     protected $signature = 'tasks:update-status';
-    protected $description = 'Update tasks from pending to assigned automatically';
+
+    protected $description = 'Handle automatic task start and finish';
+
     public function handle()
     {
         $now = now();
 
-        DistributionTask::where('status','in_progress')
+        DistributionTask::with('stores')
+            ->whereIn('status', ['pending', 'in_progress'])
             ->get()
-            ->each(function($task) use ($now) {
+            ->each(function ($task) use ($now) {
 
-                $end = \Carbon\Carbon::parse($task->date.' '.$task->end_time);
+                $start = Carbon::parse(
+                    $task->date . ' ' . $task->start_time
+                );
 
-                if ($now->gt($end)) {
-                    $task->update(['status'=>'completed']);
+                $end = Carbon::parse(
+                    $task->date . ' ' . $task->end_time
+                );
+
+                /*
+                |--------------------------------------------------------------------------
+                | AUTO START
+                |--------------------------------------------------------------------------
+                | إذا دخلنا وقت البداية والمهمة ما بدأت
+                */
+
+                if (
+                    $task->status === 'pending' &&
+                    $now->gte($start) &&
+                    $now->lt($end)
+                ) {
+
+                    $task->update([
+                        'status' => 'in_progress'
+                    ]);
+                }
+
+                /*
+                |--------------------------------------------------------------------------
+                | AUTO FINISH
+                |--------------------------------------------------------------------------
+                | إذا انتهى الوقت:
+                | - كل المحلات مزارة => completed
+                | - يوجد محلات غير مزارة => failed
+                */
+
+                if ($now->gte($end)) {
+
+                    $hasUnvisitedStores = $task->stores()
+                        ->wherePivot('visited', false)
+                        ->exists();
+
+                    if ($hasUnvisitedStores) {
+
+                        $task->update([
+                            'status' => 'failed'
+                        ]);
+
+                    } else {
+
+                        $task->update([
+                            'status' => 'completed'
+                        ]);
+                    }
                 }
             });
 
-        $this->info('done');
+        $this->info('Tasks updated successfully');
     }
 }

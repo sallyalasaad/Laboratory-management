@@ -32,9 +32,15 @@ class StoreService
         if (!$task) {
             return ['ok' => false, 'code' => 404, 'message' => 'No active task'];
         }
-
         $this->taskGuard->check($task);
+        if ($task->status !== 'in_progress') {
 
+            return [
+                'ok' => false,
+                'code' => 400,
+                'message' => 'Task is not active'
+            ];
+        }
         $storePivot = $this->dao->getTaskStore($task, $store->id);
 
         if (!$storePivot) {

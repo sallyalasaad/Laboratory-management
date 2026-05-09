@@ -21,7 +21,14 @@ class SaleService
         $store = $this->dao->findStore($storeId);
 
         $this->taskGuard->check($task);
+        if ($task->status !== 'in_progress') {
 
+            return [
+                'ok' => false,
+                'code' => 400,
+                'message' => 'Task is not active'
+            ];
+        }
         if (!$task || !$store) {
             return ['ok' => false, 'code' => 404, 'message' => 'Invalid data'];
         }
@@ -81,6 +88,15 @@ class SaleService
     public function addItems($sale, $items, $userId)
     {
         $this->taskGuard->check($sale->distributionTask);
+        if (
+            $sale->distributionTask->status !== 'in_progress'
+        ) {
+
+            return [
+                'ok' => false,
+                'message' => 'Task is not active'
+            ];
+        }
 
         if ($sale->status === 'confirmed') {
             return ['ok' => false, 'message' => 'Cannot modify confirmed sale'];

@@ -86,7 +86,7 @@ class FinishedProductReceiveController extends Controller
     }public function showReceiveItems(Request $request)
 {
     $tasks = FinishedProductTask::where('driver_id', $request->user()->id)
-        ->where('status', 'sent')
+        ->whereIn('status', ['sent', 'received'])
         ->get();
 
     if ($tasks->isEmpty()) {

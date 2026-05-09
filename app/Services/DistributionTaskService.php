@@ -309,67 +309,119 @@ class DistributionTaskService
             ];
         });
     }
-
     public function myTodayTask($user)
     {
-        $tasks = $this->dao->getDriverTodayTasksWithRelations($user->id);
+        $tasks = $this->dao
+            ->getDriverTodayTasksWithRelations($user->id);
 
         $now = now();
+
         $currentTask = null;
 
         foreach ($tasks as $task) {
 
-            $start = \Carbon\Carbon::parse($task->date . ' ' . $task->start_time);
-            $end   = \Carbon\Carbon::parse($task->date . ' ' . $task->end_time);
+            $start = \Carbon\Carbon::parse(
+                $task->date . ' ' . $task->start_time
+            );
+
+            $end = \Carbon\Carbon::parse(
+                $task->date . ' ' . $task->end_time
+            );
 
             $allowedStart = $start->copy()->subHour();
 
-            // الحالة من الداتابيس فقط كبداية
+            /*
+            |--------------------------------------------------------------------------
+            | الحالة الحالية
+            |--------------------------------------------------------------------------
+            */
+
             $computedStatus = $task->status;
 
-            // ❌ انتهت
-            if ($now->gt($end) && $task->status !== 'completed') {
-                $computedStatus = 'failed';
+            /*
+            |--------------------------------------------------------------------------
+            | المهمة انتهت
+            |--------------------------------------------------------------------------
+            */
+
+            if ($now->gte($end)) {
+
+                $computedStatus = $task->status;
             }
 
-            // ⛔ قبل وقت السماح
+            /*
+            |--------------------------------------------------------------------------
+            | قبل ساعة السماح
+            |--------------------------------------------------------------------------
+            */
+
             elseif ($now->lt($allowedStart)) {
+
                 $computedStatus = 'pending';
             }
 
-            // ⏳ داخل وقت السماح أو بعده لكن بدون تشغيل تلقائي
-            elseif ($now->between($allowedStart, $end)) {
-                if ($task->status === 'pending') {
-                    $computedStatus = 'pending'; // مهم: لا تحولها in_progress
-                }
+            /*
+            |--------------------------------------------------------------------------
+            | ضمن وقت المهمة
+            |--------------------------------------------------------------------------
+            */
+
+            elseif (
+            $now->between($allowedStart, $end)
+            ) {
+
+                $computedStatus = $task->status;
             }
 
-            // ✔ فقط إذا تم تشغيلها فعلياً
-            elseif ($task->status === 'in_progress') {
-                $computedStatus = 'in_progress';
-            }
+            /*
+            |--------------------------------------------------------------------------
+            | المهمة الحالية
+            |--------------------------------------------------------------------------
+            */
 
             if (
-                $now->between($allowedStart, $end) ||
-                $task->status === 'in_progress'
+                in_array(
+                    $computedStatus,
+                    ['pending', 'in_progress']
+                )
+                &&
+                $now->lt($end)
             ) {
+
                 $currentTask = [
+
                     'id' => $task->id,
+
                     'region' => $task->region->name,
+
                     'region_lat' => $task->region->lat ?? null,
+
                     'region_lng' => $task->region->lng ?? null,
-                    'time' => $task->start_time . ' - ' . $task->end_time,
+
+                    'time' => $task->start_time
+                        . ' - ' .
+                        $task->end_time,
+
                     'status' => $computedStatus,
 
-                    'stores' => $task->stores->map(function ($store) {
-                        return [
-                            'id' => $store->id,
-                            'name' => $store->name,
-                            'lat' => $store->lat,
-                            'lng' => $store->lng,
-                            'visited' => $store->pivot->visited,
-                        ];
-                    }),
+                    'stores' => $task->stores->map(
+                        function ($store) {
+
+                            return [
+
+                                'id' => $store->id,
+
+                                'name' => $store->name,
+
+                                'lat' => $store->lat,
+
+                                'lng' => $store->lng,
+
+                                'visited' =>
+                                    $store->pivot->visited,
+                            ];
+                        }
+                    ),
                 ];
 
                 break;
@@ -377,51 +429,172 @@ class DistributionTaskService
         }
 
         return [
+
             'current_task' => $currentTask,
-            'message' => $currentTask ? null : 'No current task'
+
+            'message' => $currentTask
+                ? null
+                : 'No current task'
+        ];
+    }
+    public function startTask($id, $request)
+    {
+        $task = $this->dao->getTaskForDriver(
+            $id,
+            $request->user()->id
+        );
+
+        $now = now();
+
+        $start = \Carbon\Carbon::parse(
+            $task->date . ' ' . $task->start_time
+        );
+
+        $allowed = $start->copy()->subHour();
+
+        $end = \Carbon\Carbon::parse(
+            $task->date . ' ' . $task->end_time
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | لا يمكن البدء قبل ساعة السماح
+        |--------------------------------------------------------------------------
+        */
+
+        if ($now->lt($allowed)) {
+
+            return [
+                'ok' => false,
+                'code' => 400,
+                'message' => 'Too early'
+            ];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | انتهى وقت المهمة
+        |--------------------------------------------------------------------------
+        */
+
+        if ($now->gte($end)) {
+
+            return [
+                'ok' => false,
+                'code' => 400,
+                'message' => 'Task expired'
+            ];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | المهمة بدأت مسبقاً
+        |--------------------------------------------------------------------------
+        */
+
+        if ($task->status === 'in_progress') {
+
+            return [
+                'ok' => false,
+                'code' => 400,
+                'message' => 'Task already started'
+            ];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | المهمة منتهية
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+        in_array($task->status, ['completed', 'failed'])
+        ) {
+
+            return [
+                'ok' => false,
+                'code' => 400,
+                'message' => 'Task already finished'
+            ];
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | بدء المهمة
+        |--------------------------------------------------------------------------
+        */
+
+        $this->dao->updateTaskStatus(
+            $task,
+            'in_progress'
+        );
+
+        return [
+            'ok' => true,
+            'message' => 'Task started successfully'
+        ];
+    }public function completeTask($id, $request)
+{
+    $task = $this->dao->getTaskForDriver(
+        $id,
+        $request->user()->id
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | المهمة يجب أن تكون قيد التنفيذ
+    |--------------------------------------------------------------------------
+    */
+
+    if ($task->status !== 'in_progress') {
+
+        return [
+            'ok' => false,
+            'code' => 400,
+            'message' => 'Task is not in progress'
         ];
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | التحقق من المحلات
+    |--------------------------------------------------------------------------
+    */
 
+    $hasUnvisitedStores = $task->stores()
+        ->wherePivot('visited', false)
+        ->exists();
 
+    /*
+    |--------------------------------------------------------------------------
+    | لا يمكن إنهاء المهمة قبل زيارة جميع المحلات
+    |--------------------------------------------------------------------------
+    */
 
+    if ($hasUnvisitedStores) {
 
-public function startTask($id, $request)
-{
-    $task = $this->dao->getTaskForDriver($id, $request->user()->id);
-
-    $now = now();
-
-    $start = \Carbon\Carbon::parse($task->date.' '.$task->start_time);
-    $allowed = $start->copy()->subHour();
-    $end = \Carbon\Carbon::parse($task->date.' '.$task->end_time);
-
-    if ($now->lt($allowed)) {
-        return ['ok'=>false,'code'=>400,'message'=>'Too early'];
+        return [
+            'ok' => false,
+            'code' => 400,
+            'message' => 'All stores must be visited first'
+        ];
     }
 
-    if ($now->gt($end)) {
-        return ['ok'=>false,'code'=>400,'message'=>'Expired'];
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | إنهاء المهمة
+    |--------------------------------------------------------------------------
+    */
 
-    if ($task->status === 'in_progress') {
-        return ['ok'=>false,'code'=>400,'message'=>'Already started'];
-    }
+    $this->dao->updateTaskStatus(
+        $task,
+        'completed'
+    );
 
-    $this->dao->updateTaskStatus($task, 'in_progress');
-
-    return ['ok'=>true,'message'=>'Started'];
-}public function completeTask($id, $request)
-{
-    $task = $this->dao->getTaskForDriver($id, $request->user()->id);
-
-    if ($task->status !== 'in_progress') {
-        return ['ok'=>false,'code'=>400,'message'=>'Not allowed'];
-    }
-
-    $this->dao->updateTaskStatus($task, 'completed');
-
-    return ['ok'=>true,'message'=>'Completed'];
+    return [
+        'ok' => true,
+        'message' => 'Task completed successfully'
+    ];
 }
     public function myDailyTasks($user)
     {
