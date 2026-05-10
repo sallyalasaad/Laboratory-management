@@ -18,8 +18,12 @@ use App\Http\Controllers\SaleController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\DistributionTaskController;
+use App\Http\Controllers\ForecastController;
 
 //////////////////////////////////////////////////////////
+
+Route::get('/forecast', [ForecastController::class, 'forecast']);
+
 // تسجيل الدخول
 //////////////////////////////////////////////////////////
 
