@@ -267,6 +267,12 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper']
     // Display product details with batch information
     Route::get('/finished-products/{productId}/details', [FinishedProductWarehouseController::class, 'getProductDetails']);
 
+    // Get returned items from drivers
+    Route::get('/returned-items', [FinishedProductWarehouseController::class, 'getReturnedItems']);
+
+    // Accept returned item
+    Route::post('/returned-items/{carStockItemId}/accept', [FinishedProductWarehouseController::class, 'acceptReturnedItem']);
+
 });
 
 //////////////////////////////////////////////////////////

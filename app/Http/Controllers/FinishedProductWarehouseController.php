@@ -89,4 +89,42 @@ class FinishedProductWarehouseController extends Controller
             'batches' => $result['batches'],
         ], 200);
     }
+
+    // Get returned items from drivers
+    public function getReturnedItems(Request $request)
+    {
+        if (!$this->authorizeUser()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $result = $this->service->getReturnedItems();
+
+        return response()->json([
+            'message' => 'Returned items retrieved successfully',
+            'data' => $result['data'],
+            'summary' => $result['summary']
+        ], 200);
+    }
+
+    // Accept returned item
+    public function acceptReturnedItem(Request $request, $carStockItemId)
+    {
+        if (!$this->authorizeUser()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        try {
+            $result = $this->service->acceptReturnedItem($carStockItemId);
+
+            return response()->json([
+                'message' => $result['message'],
+                'accepted_quantity' => $result['accepted_quantity']
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to accept returned item',
+                'error' => $e->getMessage()
+            ], 400);
+        }
+    }
 }

@@ -13,39 +13,39 @@ class FinishedProductWarehouseService
      */
     public function getAllFinishedProducts()
     {
-    $products = FinishedProduct::with(['batches' => function ($query) {
-        $query->orderBy('production_date', 'asc');
-    }])->get();
+        $products = FinishedProduct::with(['batches' => function ($query) {
+            $query->orderBy('production_date', 'asc');
+        }])->get();
 
-    $formatted = $products->map(function ($product) {
-        $batches = $product->batches;
+        $formatted = $products->map(function ($product) {
+            $batches = $product->batches;
 
-        $batchDetails = $batches->map(function ($batch) {
-            return $this->formatBatchDetails($batch);
+            $batchDetails = $batches->map(function ($batch) {
+                return $this->formatBatchDetails($batch);
+            });
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'size' => $product->size,
+                'unit' => $product->unit,
+                'total_quantity' => $batches->sum('quantity'),
+                'total_remaining_quantity' => $batches->sum('remaining_quantity'),
+                'total_batches' => $batches->count(),
+                'batches' => $batchDetails,
+            ];
         });
 
         return [
-            'id' => $product->id,
-            'name' => $product->name,
-            'size' => $product->size,
-            'unit' => $product->unit,
-            'total_quantity' => $batches->sum('quantity'),
-            'total_remaining_quantity' => $batches->sum('remaining_quantity'),
-            'total_batches' => $batches->count(),
-            'batches' => $batchDetails,
+            'data' => $formatted,
+            'summary' => [
+                'total_products' => $formatted->count(),
+                'total_quantity' => $formatted->sum('total_quantity'),
+                'total_remaining_quantity' => $formatted->sum('total_remaining_quantity'),
+                'total_batches' => $formatted->sum('total_batches'),
+            ]
         ];
-    });
-
-    return [
-        'data' => $formatted,
-        'summary' => [
-            'total_products' => $formatted->count(),
-            'total_quantity' => $formatted->sum('total_quantity'),
-            'total_remaining_quantity' => $formatted->sum('total_remaining_quantity'),
-            'total_batches' => $formatted->sum('total_batches'),
-        ]
-    ];
-}
+    }
 
     /**
      * Get product details by ID
@@ -144,5 +144,87 @@ class FinishedProductWarehouseService
                 'total_quantity' => $product->batches->sum('quantity'),
             ];
         });
+    }
+
+    /**
+     * Get returned items from drivers
+     */
+    public function getReturnedItems()
+    {
+        // Get all returned items from CarStockItem where quantity > 0
+        // These represent items that were sent to drivers and returned
+        $returnedItems = \App\Models\CarStockItem::with([
+            'finishedProductBatch.finishedProduct',
+            'carStock.user' // driver info
+        ])
+        ->where('quantity', '>', 0)
+        ->whereHas('carStock', function($query) {
+            $query->where('status', 'active');
+        })
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+        $formattedReturns = $returnedItems->map(function ($item) {
+            $batch = $item->finishedProductBatch;
+            $driver = $item->carStock->user;
+
+            // Find the original send task for this batch and driver
+            $sendTask = \App\Models\FinishedProductTask::where('driver_id', $driver->id)
+                ->where('status', 'sent')
+                ->whereRaw("JSON_CONTAINS(details->'$.allocations', JSON_OBJECT('batch_id', ?))", [$item->finished_product_batch_id])
+                ->orderBy('sent_at', 'desc')
+                ->first();
+
+            return [
+                'id' => $item->id,
+                'send_task_id' => $sendTask ? $sendTask->id : null,
+                'finished_product_name' => $batch->finishedProduct->name ?? 'Unknown',
+                'size' => $batch->finishedProduct->size ?? '',
+                'returned_quantity' => $item->quantity,
+                'production_date' => $batch->production_date,
+                'expiry_date' => $batch->expiry_date,
+                'driver_name' => $driver->name,
+                'send_date' => $sendTask ? $sendTask->sent_at : null,
+                'return_date' => $item->updated_at, // When it was returned
+                'batch_number' => $batch->batch_number,
+            ];
+        });
+
+        return [
+            'data' => $formattedReturns,
+            'summary' => [
+                'total_returns' => $formattedReturns->count(),
+                'total_quantity_returned' => $formattedReturns->sum('returned_quantity'),
+            ]
+        ];
+    }
+
+    /**
+     * Accept returned item and update warehouse stock
+     */
+    public function acceptReturnedItem($carStockItemId)
+    {
+        $carStockItem = \App\Models\CarStockItem::findOrFail($carStockItemId);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($carStockItem) {
+            $batch = $carStockItem->finishedProductBatch;
+
+            // Update warehouse batch remaining quantity
+            $batch->increment('remaining_quantity', $carStockItem->quantity);
+
+            // Update car stock item status or remove it
+            $carStockItem->update([
+                'remaining_quantity' => \Illuminate\Support\Facades\DB::raw("remaining_quantity - {$carStockItem->quantity}"),
+                'quantity' => 0 // Mark as processed
+            ]);
+
+            // Log the return acceptance
+            // You might want to create a return log table for tracking
+        });
+
+        return [
+            'message' => 'Returned item accepted successfully',
+            'accepted_quantity' => $carStockItem->quantity
+        ];
     }
 }
