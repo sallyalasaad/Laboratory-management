@@ -122,11 +122,21 @@ class FinishedProductReceiveController extends Controller
         $date = $task->sent_at
             ? \Carbon\Carbon::parse($task->sent_at)->format('Y-m-d')
             : $task->created_at->format('Y-m-d');
-
         $groups[] = [
             'task_id' => $task->id,
-            'title' => "تأكيد استلام – " . $date,
+
+            // 🔥 حالة المهمة
+            'status' => $task->status,
+
+            // 🔥 هل تم التأكيد؟
+            'is_confirmed' => $task->status === 'received',
+
+            'title' => $task->status === 'received'
+                ? "مواد مؤكدة – " . $date
+                : "بانتظار التأكيد – " . $date,
+
             'date' => $date,
+
             'items' => $items->values()
         ];
     }
