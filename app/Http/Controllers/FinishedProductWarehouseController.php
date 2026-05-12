@@ -107,24 +107,27 @@ class FinishedProductWarehouseController extends Controller
     }
 
     // Accept returned item
-    public function acceptReturnedItem(Request $request, $carStockItemId)
-    {
-        if (!$this->authorizeUser()) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        try {
-            $result = $this->service->acceptReturnedItem($carStockItemId);
-
-            return response()->json([
-                'message' => $result['message'],
-                'accepted_quantity' => $result['accepted_quantity']
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to accept returned item',
-                'error' => $e->getMessage()
-            ], 400);
-        }
+ public function acceptReturnedItem(Request $request, $driverId)
+{
+    if (!$this->authorizeUser()) {
+        return response()->json([
+            'message' => 'Unauthorized'
+        ], 403);
     }
+
+    try {
+
+        $result = $this->service
+            ->acceptReturnedItem($driverId);
+
+        return response()->json($result, 200);
+
+    } catch (\Exception $e) {
+
+        return response()->json([
+            'message' => 'Failed to accept returned items',
+            'error' => $e->getMessage()
+        ], 400);
+    }
+}
 }

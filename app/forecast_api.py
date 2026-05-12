@@ -66,7 +66,7 @@ def remove_past_ramadan_effect(row):
 def forecast(target_month: str):
 
     data = pd.read_csv(
-        r"D:\Laboratory-management\app\cheese_monthly.csv"
+        r"C:\Users\dell\Desktop\Laboratory-management\app\cheese_monthly.csv"
     )
 
     data['month'] = pd.to_datetime(data['month'])
@@ -186,7 +186,6 @@ def forecast(target_month: str):
         )
 
         total_cheese_kg += cheese_kg
-
         results.append({
             "size": size,
             "forecast":

@@ -169,12 +169,14 @@ class FinishedProductWarehouseService
             $driver = $item->carStock->user;
 
             // Find the original send task for this batch and driver
-            $sendTask = \App\Models\FinishedProductTask::where('driver_id', $driver->id)
-                ->where('status', 'sent')
-                ->whereRaw("JSON_CONTAINS(details->'$.allocations', JSON_OBJECT('batch_id', ?))", [$item->finished_product_batch_id])
-                ->orderBy('sent_at', 'desc')
-                ->first();
-
+           $sendTask = \App\Models\FinishedProductTask::where('driver_id', $driver->id)
+    ->where('status', 'sent')
+    ->whereRaw(
+        "JSON_CONTAINS(JSON_EXTRACT(details, '$.allocations'), JSON_OBJECT('batch_id', ?))",
+        [$item->finished_product_batch_id]
+    )
+    ->orderBy('sent_at', 'desc')
+    ->first();
             return [
                 'id' => $item->id,
                 'send_task_id' => $sendTask ? $sendTask->id : null,
@@ -201,30 +203,63 @@ class FinishedProductWarehouseService
 
     /**
      * Accept returned item and update warehouse stock
-     */
-    public function acceptReturnedItem($carStockItemId)
-    {
-        $carStockItem = \App\Models\CarStockItem::findOrFail($carStockItemId);
+     */public function acceptReturnedItem($driverId)
+{
+    $returnedItems = \App\Models\CarStockItem::with([
+        'finishedProductBatch.finishedProduct',
+        'carStock.user'
+    ])
+    ->where('quantity', '>', 0)
+    ->whereHas('carStock', function ($q) use ($driverId) {
+        $q->where('user_id', $driverId);
+    })
+    ->get();
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($carStockItem) {
-            $batch = $carStockItem->finishedProductBatch;
-
-            // Update warehouse batch remaining quantity
-            $batch->increment('remaining_quantity', $carStockItem->quantity);
-
-            // Update car stock item status or remove it
-            $carStockItem->update([
-                'remaining_quantity' => \Illuminate\Support\Facades\DB::raw("remaining_quantity - {$carStockItem->quantity}"),
-                'quantity' => 0 // Mark as processed
-            ]);
-
-            // Log the return acceptance
-            // You might want to create a return log table for tracking
-        });
-
-        return [
-            'message' => 'Returned item accepted successfully',
-            'accepted_quantity' => $carStockItem->quantity
-        ];
+    if ($returnedItems->isEmpty()) {
+        throw new \Exception("No returned items found for this driver");
     }
+
+    $acceptedItems = [];
+    $totalQty = 0;
+
+    \Illuminate\Support\Facades\DB::transaction(function () use (
+        $returnedItems,
+        &$acceptedItems,
+        &$totalQty
+    ) {
+
+        foreach ($returnedItems as $item) {
+
+            $batch = $item->finishedProductBatch;
+
+            $batch->increment(
+                'remaining_quantity',
+                $item->quantity
+            );
+
+            $acceptedItems[] = [
+                'product_name' => $batch->finishedProduct->name ?? '',
+                'size' => $batch->finishedProduct->size ?? '',
+                'batch_number' => $batch->batch_number,
+                'accepted_quantity' => $item->quantity,
+                'production_date' => $batch->production_date,
+                'expiry_date' => $batch->expiry_date,
+                'driver_name' => $item->carStock->user->name ?? ''
+            ];
+
+            $totalQty += $item->quantity;
+
+            $item->update([
+                'quantity' => 0
+            ]);
+        }
+    });
+
+    return [
+        'message' => 'All returned items accepted successfully',
+        'accepted_items_count' => count($acceptedItems),
+        'accepted_total_quantity' => $totalQty,
+        'items' => $acceptedItems
+    ];
+}
 }

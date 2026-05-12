@@ -118,6 +118,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:production_employee|admin|super_admin')
         ->post('/production/tasks/{id}/confirm-receive', [RawMaterialTaskController::class, 'confirmReceiveinp']);
 
+    // عرض المواد الأولية المؤكد استلامها من قبل موظف الإنتاج
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production/received-materials', [RawMaterialTaskController::class, 'listProductionConfirmedMaterials']);
+
 
 });
 
@@ -275,7 +279,7 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper']
     Route::get('/returned-items', [FinishedProductWarehouseController::class, 'getReturnedItems']);
 
     // Accept returned item
-    Route::post('/returned-items/{carStockItemId}/accept', [FinishedProductWarehouseController::class, 'acceptReturnedItem']);
+    Route::post('/warehouse/returns/accept-all/{driverId}', [FinishedProductWarehouseController::class, 'acceptReturnedItem']);
 
 });
 

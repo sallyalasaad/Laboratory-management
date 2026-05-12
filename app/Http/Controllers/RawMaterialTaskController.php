@@ -347,24 +347,61 @@ class RawMaterialTaskController extends Controller
         ], 201);
     }
     // Admin lists notes for a task (shows read/unread)
-    public function adminListNotes()
-    { /** @var \App\Models\User $user */
-        $user = Auth::user();
+   public function adminListNotes(Request $request)
+{
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
 
-        if (!($user->hasRole('admin') || $user->hasRole('super_admin'))) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        $notes = Note::with(['fromUser'])
-            ->orderBy('is_read', 'asc')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
+    if (!($user->hasRole('admin') || $user->hasRole('super_admin'))) {
         return response()->json([
-            'notes' => $notes
-        ]);
+            'message' => 'Unauthorized'
+        ], 403);
     }
 
+    // فلتر اختياري حسب الدور
+    $role = $request->role;
+
+    $query = Note::with([
+        'fromUser.roles'
+    ]);
+
+    // إذا تم إرسال role
+    if ($role) {
+        $query->whereHas('fromUser.roles', function ($q) use ($role) {
+            $q->where('name', $role);
+        });
+    }
+
+    $notes = $query
+        ->orderBy('is_read', 'asc')
+        ->orderBy('created_at', 'desc')
+        ->get()
+        ->map(function ($note) {
+
+            return [
+                'id' => $note->id,
+                'message' => $note->message,
+                'is_read' => $note->is_read,
+
+                'sender' => [
+                    'id' => $note->fromUser->id ?? null,
+                    'name' => $note->fromUser->name ?? null,
+                    'role' =>
+                        $note->fromUser
+                        ->roles
+                        ->pluck('name')
+                        ->implode(', ')
+                ],
+
+                'created_at' => $note->created_at
+            ];
+        });
+
+    return response()->json([
+        'message' => 'Notes retrieved successfully',
+        'notes' => $notes
+    ]);
+}
     // Admin marks a single note as read
     public function markNoteRead(Request $request, $noteId)
     { /** @var \App\Models\User $user */
@@ -518,6 +555,73 @@ class RawMaterialTaskController extends Controller
         });
 
         return response()->json(['confirmed_sent_materials' => $formatted]);
+    }
+
+    // Display raw materials confirmed received by production employee
+    public function listProductionConfirmedMaterials(Request $request)
+    {
+        $user = Auth::user();
+
+        if (!$user->hasRole('production_employee') && !$user->hasRole('admin') && !$user->hasRole('super_admin')) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $tasks = RawMaterialTask::where('route', 'send_to_production')
+            ->where('status', 'received_by_production')
+            ->with(['user', 'admin'])
+            ->orderBy('updated_at', 'desc')
+            ->get();
+
+        $formatted = $tasks->map(function ($task) {
+            $details = $task->details ?? [];
+            $sentAllocations = $details['sent_allocations'] ?? [];
+
+            // Load batch details for each allocation
+            $allocationsWithDetails = [];
+            foreach ($sentAllocations as $alloc) {
+                $batch = RawMaterialBatch::with('rawMaterial')->find($alloc['batch_id']);
+                if ($batch) {
+                    $allocationsWithDetails[] = [
+                        'raw_material_id' => $alloc['raw_material_id'],
+                        'raw_material_name' => $batch->rawMaterial->name ?? 'Unknown',
+                        'batch_id' => $alloc['batch_id'],
+                        'batch_number' => $batch->batch_number,
+                        'quantity' => $alloc['quantity'],
+                        'expiry_date' => $batch->expiry_date,
+                        'received_at' => $batch->received_at,
+                    ];
+                }
+            }
+
+            // Get production employee who confirmed receipt
+            $productionEmployee = null;
+            if ($details['production_received_by']) {
+                $productionEmployee = User::find($details['production_received_by']);
+            }
+
+            return [
+                'task_id' => $task->id,
+                'sent_at' => $task->sent_at,
+                'production_received_at' => $details['production_received_at'] ?? null,
+                'production_employee' => $productionEmployee ? $productionEmployee->name : 'Unknown',
+               // 'warehouse_keeper' => $task->user->name ?? 'Unknown',
+                //'admin' => $task->admin->name ?? 'Unknown',
+                'allocations' => $allocationsWithDetails,
+                'total_quantity' => collect($allocationsWithDetails)->sum('quantity'),
+            ];
+        });
+
+        $summary = [
+            'total_tasks' => $formatted->count(),
+            'total_quantity' => $formatted->sum('total_quantity'),
+            'total_materials' => $formatted->pluck('allocations')->flatten(1)->count(),
+        ];
+
+        return response()->json([
+            'message' => 'Production confirmed materials retrieved successfully',
+            'data' => $formatted,
+            'summary' => $summary
+        ]);
     }
 
 }

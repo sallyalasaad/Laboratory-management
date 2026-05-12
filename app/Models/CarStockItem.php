@@ -13,6 +13,13 @@ class CarStockItem extends Model
         'quantity',
         'remaining_quantity'
     ];
+    public function finishedProductBatch()
+{
+    return $this->belongsTo(
+        FinishedProductBatch::class,
+        'finished_product_batch_id'
+    );
+}
 
     public function carStock()
     {
