@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\FinishedProductBatch;
 use App\Models\FinishedProduct;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class FinishedProductWarehouseService
 {
@@ -200,66 +201,107 @@ class FinishedProductWarehouseService
             ]
         ];
     }
-
     /**
      * Accept returned item and update warehouse stock
-     */public function acceptReturnedItem($driverId)
-{
-    $returnedItems = \App\Models\CarStockItem::with([
-        'finishedProductBatch.finishedProduct',
-        'carStock.user'
-    ])
-    ->where('quantity', '>', 0)
-    ->whereHas('carStock', function ($q) use ($driverId) {
-        $q->where('user_id', $driverId);
-    })
-    ->get();
+     */
+    public function acceptReturnedItem($driverId)
+    {
+        $returnedItems = \App\Models\CarStockItem::with([
+            'finishedProductBatch.finishedProduct',
+            'carStock.user'
+        ])
+        ->where('quantity', '>', 0)
+        ->whereHas('carStock', function ($q) use ($driverId) {
+            $q->where('user_id', $driverId);
+        })
+        ->get();
 
-    if ($returnedItems->isEmpty()) {
-        throw new \Exception("No returned items found for this driver");
+        if ($returnedItems->isEmpty()) {
+            throw new \Exception("No returned items found for this driver");
+        }
+
+        $acceptedItems = [];
+        $totalQty = 0;
+
+        DB::transaction(function () use (
+            $returnedItems,
+            &$acceptedItems,
+            &$totalQty
+        ) {
+
+            foreach ($returnedItems as $item) {
+
+                $batch = $item->finishedProductBatch;
+
+                $batch->increment(
+                    'remaining_quantity',
+                    $item->quantity
+                );
+
+                $acceptedItems[] = [
+                    'product_name' => $batch->finishedProduct->name ?? '',
+                    'size' => $batch->finishedProduct->size ?? '',
+                    'batch_number' => $batch->batch_number,
+                    'accepted_quantity' => $item->quantity,
+                    'production_date' => $batch->production_date,
+                    'expiry_date' => $batch->expiry_date,
+                    'driver_name' => $item->carStock->user->name ?? ''
+                ];
+
+                $totalQty += $item->quantity;
+
+                $item->update([
+                    'quantity' => 0
+                ]);
+            }
+        });
+
+        return [
+            'message' => 'All returned items accepted successfully',
+            'accepted_items_count' => count($acceptedItems),
+            'accepted_total_quantity' => $totalQty,
+            'items' => $acceptedItems
+        ];
     }
 
-    $acceptedItems = [];
-    $totalQty = 0;
+    /**
+     * اتلاف - عرض المواد المنتهية الصلاحية في مستودع المواد الجاهزة
+     */
+    public function اتلاف()
+    {
+        $now = Carbon::now();
+        $expiredBatches = FinishedProductBatch::with('finishedProduct')
+            ->where('expiry_date', '<', $now)
+            ->where('remaining_quantity', '>', 0)
+            ->orderBy('expiry_date', 'asc')
+            ->get();
 
-    \Illuminate\Support\Facades\DB::transaction(function () use (
-        $returnedItems,
-        &$acceptedItems,
-        &$totalQty
-    ) {
+        $data = $expiredBatches->map(function ($batch) use ($now) {
+            $expiryDate = Carbon::parse($batch->expiry_date);
+            $daysSinceExpiry = $expiryDate->isPast() ? $expiryDate->diffInDays($now) : 0;
 
-        foreach ($returnedItems as $item) {
-
-            $batch = $item->finishedProductBatch;
-
-            $batch->increment(
-                'remaining_quantity',
-                $item->quantity
-            );
-
-            $acceptedItems[] = [
-                'product_name' => $batch->finishedProduct->name ?? '',
-                'size' => $batch->finishedProduct->size ?? '',
+            return [
+                'id' => $batch->id,
+                'finished_product_id' => $batch->finished_product_id,
+                'finished_product_name' => $batch->finishedProduct->name ?? 'Unknown',
                 'batch_number' => $batch->batch_number,
-                'accepted_quantity' => $item->quantity,
+                'quantity' => $batch->quantity,
+                'remaining_quantity' => $batch->remaining_quantity,
                 'production_date' => $batch->production_date,
                 'expiry_date' => $batch->expiry_date,
-                'driver_name' => $item->carStock->user->name ?? ''
+                'days_since_expiry' => $daysSinceExpiry,
+                'status' => 'منتهية الصلاحية',
             ];
+        });
 
-            $totalQty += $item->quantity;
+        return [
+            'data' => $data,
+            'summary' => [
+                'total_expired_batches' => $data->count(),
+                'total_quantity' => $data->sum('quantity'),
+                'total_remaining_quantity' => $data->sum('remaining_quantity'),
+            ]
+        ];
+    }
 
-            $item->update([
-                'quantity' => 0
-            ]);
-        }
-    });
-
-    return [
-        'message' => 'All returned items accepted successfully',
-        'accepted_items_count' => count($acceptedItems),
-        'accepted_total_quantity' => $totalQty,
-        'items' => $acceptedItems
-    ];
-}
 }

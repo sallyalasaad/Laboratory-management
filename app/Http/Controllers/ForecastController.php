@@ -8,10 +8,20 @@ use Illuminate\Http\Request;
 
 use Illuminate\Support\Facades\Http;
 
+use Illuminate\Support\Facades\Auth;
 class ForecastController extends Controller
 {
-public function forecast(Request $request)
+   public function forecast(Request $request)
 {
+    $user = Auth::user();
+
+    if (!$user || !in_array($user->role, ['admin', 'accountant'])) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Unauthorized'
+        ], 403);
+    }
+
     $month = $request->input('month');
 
     $response = Http::get(
@@ -22,5 +32,4 @@ public function forecast(Request $request)
     );
 
     return $response->json();
-}
-}
+}}
