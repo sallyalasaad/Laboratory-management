@@ -14,5 +14,18 @@ class FinishedProductBatchDAO
     {
         return FinishedProductBatch::where('production_order_id', $orderId)->get();
     }
-
+// دالة تحديث الحالة
+    public function updateStatus($id, string $status, array $additionalData = [])
+    {
+        $batch = FinishedProductBatch::findOrFail($id);
+        $batch->status = $status;
+        
+        // تحديث أي بيانات إضافية (مثل تفعيل الكمية عند الاستلام)
+        if (!empty($additionalData)) {
+            $batch->fill($additionalData);
+        }
+        
+        $batch->save();
+        return $batch;
+    }
 }

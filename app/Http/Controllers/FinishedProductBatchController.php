@@ -43,4 +43,29 @@ class FinishedProductBatchController extends Controller
             $this->service->getBatchesByOrder($orderId)
         );
     }
+
+
+public function send($id) {
+    try {
+        $batch = $this->service->sendBatch($id);
+        return response()->json(['message' => 'تم إرسال الدفعة بنجاح', 'batch' => $batch], 200);
+    } catch (\Exception $e) {
+        return response()->json(['message' => 'حدث خطأ أثناء الإرسال'], 500);
+    }
+}
+
+public function receive($id) {
+    try {
+        $batch = $this->service->receiveBatch($id);
+        return response()->json(['message' => 'تم استلام الدفعة وإضافتها للمخزون', 'batch' => $batch], 200);
+    } catch (\Exception $e) {
+        return response()->json(['message' => 'حدث خطأ أثناء الاستلام'], 500);
+    }
+}
+
+
+
+
+
+
 }

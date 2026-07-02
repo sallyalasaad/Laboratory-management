@@ -19,6 +19,7 @@ return new class extends Migration
         $table->decimal('remaining_quantity', 10, 2);
         $table->date('production_date')->nullable();
         $table->date('expiry_date')->nullable();
+        $table->string('status')->default('created');
         $table->timestamps();
     });
 
