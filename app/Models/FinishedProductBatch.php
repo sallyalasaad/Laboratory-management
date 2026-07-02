@@ -8,7 +8,7 @@ class FinishedProductBatch extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['finished_product_id','production_order_id','batch_number','quantity','remaining_quantity','production_date','expiry_date'];
+    protected $fillable = ['finished_product_id','production_order_id','batch_number','quantity','remaining_quantity','production_date','expiry_date','status'];
 
     protected static function booted()
     {

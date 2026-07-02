@@ -559,70 +559,76 @@ class RawMaterialTaskController extends Controller
 
     // Display raw materials confirmed received by production employee
     public function listProductionConfirmedMaterials(Request $request)
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
 
-        if (!$user->hasRole('production_employee') && !$user->hasRole('admin') && !$user->hasRole('super_admin')) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+    if (!$user->hasRole('production_employee') && !$user->hasRole('admin') && !$user->hasRole('super_admin')) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    // جلب كل المهام المتعلقة بالإرسال للإنتاج سواء كانت مستلمة أو لا تزال قيد الإرسال
+    $tasks = RawMaterialTask::where('route', 'send_to_production')
+        ->whereIn('status', ['completed', 'received_by_production'])
+        ->with(['user', 'admin'])
+        ->orderBy('updated_at', 'desc')
+        ->get();
+
+    $formatted = $tasks->map(function ($task) {
+        $details = $task->details ?? [];
+        $sentAllocations = $details['sent_allocations'] ?? [];
+
+        // جلب تفاصيل الدفعات
+        $allocationsWithDetails = [];
+        foreach ($sentAllocations as $alloc) {
+            $batch = RawMaterialBatch::with('rawMaterial')->find($alloc['batch_id']);
+            if ($batch) {
+                $allocationsWithDetails[] = [
+                    'raw_material_id' => $alloc['raw_material_id'],
+                    'raw_material_name' => $batch->rawMaterial->name ?? 'Unknown',
+                    'batch_id' => $alloc['batch_id'],
+                    'batch_number' => $batch->batch_number,
+                    'quantity' => $alloc['quantity'],
+                    'expiry_date' => $batch->expiry_date,
+                    'received_at' => $batch->received_at,
+                ];
+            }
         }
 
-        $tasks = RawMaterialTask::where('route', 'send_to_production')
-            ->where('status', 'received_by_production')
-            ->with(['user', 'admin'])
-            ->orderBy('updated_at', 'desc')
-            ->get();
+        // الموظف الذي أكد الاستلام (إن وجد)
+        $productionEmployee = null;
+        if (!empty($details['production_received_by'])) {
+            $productionEmployee = User::find($details['production_received_by']);
+        }
 
-        $formatted = $tasks->map(function ($task) {
-            $details = $task->details ?? [];
-            $sentAllocations = $details['sent_allocations'] ?? [];
+        // الحالة: مؤكد الاستلام أم لا
+        $isConfirmed = $task->status === 'received_by_production';
 
-            // Load batch details for each allocation
-            $allocationsWithDetails = [];
-            foreach ($sentAllocations as $alloc) {
-                $batch = RawMaterialBatch::with('rawMaterial')->find($alloc['batch_id']);
-                if ($batch) {
-                    $allocationsWithDetails[] = [
-                        'raw_material_id' => $alloc['raw_material_id'],
-                        'raw_material_name' => $batch->rawMaterial->name ?? 'Unknown',
-                        'batch_id' => $alloc['batch_id'],
-                        'batch_number' => $batch->batch_number,
-                        'quantity' => $alloc['quantity'],
-                        'expiry_date' => $batch->expiry_date,
-                        'received_at' => $batch->received_at,
-                    ];
-                }
-            }
-
-            // Get production employee who confirmed receipt
-            $productionEmployee = null;
-            if ($details['production_received_by']) {
-                $productionEmployee = User::find($details['production_received_by']);
-            }
-
-            return [
-                'task_id' => $task->id,
-                'sent_at' => $task->sent_at,
-                'production_received_at' => $details['production_received_at'] ?? null,
-                'production_employee' => $productionEmployee ? $productionEmployee->name : 'Unknown',
-               // 'warehouse_keeper' => $task->user->name ?? 'Unknown',
-                //'admin' => $task->admin->name ?? 'Unknown',
-                'allocations' => $allocationsWithDetails,
-                'total_quantity' => collect($allocationsWithDetails)->sum('quantity'),
-            ];
-        });
-
-        $summary = [
-            'total_tasks' => $formatted->count(),
-            'total_quantity' => $formatted->sum('total_quantity'),
-            'total_materials' => $formatted->pluck('allocations')->flatten(1)->count(),
+        return [
+            'task_id' => $task->id,
+            'sent_at' => $task->sent_at,
+            'status' => $task->status,
+            'is_confirmed' => $isConfirmed,
+            'production_received_at' => $details['production_received_at'] ?? null,
+            'production_employee' => $productionEmployee ? $productionEmployee->name : null,
+            'allocations' => $allocationsWithDetails,
+            'total_quantity' => collect($allocationsWithDetails)->sum('quantity'),
         ];
+    });
 
-        return response()->json([
-            'message' => 'Production confirmed materials retrieved successfully',
-            'data' => $formatted,
-            'summary' => $summary
-        ]);
-    }
+    $summary = [
+        'total_tasks' => $formatted->count(),
+        'total_quantity' => $formatted->sum('total_quantity'),
+        'total_materials' => $formatted->pluck('allocations')->flatten(1)->count(),
+        'confirmed_tasks' => $formatted->where('is_confirmed', true)->count(),
+        'unconfirmed_tasks' => $formatted->where('is_confirmed', false)->count(),
+    ];
+
+    return response()->json([
+        'message' => 'All production materials with confirmation status retrieved successfully',
+        'data' => $formatted,
+        'summary' => $summary
+    ]);
+}
 
 }
 

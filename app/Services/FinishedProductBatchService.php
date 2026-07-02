@@ -38,29 +38,45 @@ class FinishedProductBatchService
     $expiryDate = $expiryType === 'year'
         ? $productionDateCarbon->copy()->addYears($expiryValue)
         : $productionDateCarbon->copy()->addMonths($expiryValue);
-
-    $batch = $this->dao->create([
+$batch = $this->dao->create([
         'finished_product_id' => $finishedProductId,
         'production_order_id' => $productionOrderId,
         'batch_number' => 'BATCH-' . now()->format('Ymd') . '-' . Str::random(4),
         'quantity' => $quantity,
-        'remaining_quantity' => $quantity,
+        'remaining_quantity' => 0, // لن تظهر في المخزون حتى يتم الاستلام
+        'status' => 'created',     // الحالة الابتدائية
         'production_date' => $productionDate,
         'expiry_date' => $expiryDate->format('Y-m-d'),
     ]);
 
-    $order->status = ($produced + $quantity >= $order->quantity)
-        ? 'completed'
-        : 'in_progress';
-
-    $order->save();
-
+    // ... (تحديث حالة الطلب)
     return $batch;
 }
-
 
     public function getBatchesByOrder($orderId)
     {
         return $this->dao->findByOrderId($orderId);
     }
+
+
+// دالة إرسال الدفعة
+public function sendBatch($batchId) {
+    // نحدد الحالة فقط
+    return $this->dao->updateStatus($batchId, 'sent');
+}
+
+// دالة استلام الدفعة
+public function receiveBatch($batchId) {
+    $batch = FinishedProductBatch::findOrFail($batchId);
+    
+    // عند الاستلام نقوم بتحديث الحالة وتفعيل الكمية للمخزون معاً
+    return $this->dao->updateStatus($batchId, 'received', [
+        'remaining_quantity' => $batch->quantity
+    ]);
+}
+
+
+
+
+
 }
