@@ -64,8 +64,26 @@ public function receive($id) {
 }
 
 
+public function listAllSentMaterials(Request $request)
+{
+    
+ 
+
+    // طلب البيانات المنسقة من السيرفس
+    $data = $this->service->getFormattedProductionTasks();
+
+    return response()->json([
+        'message' => 'All materials retrieved successfully',
+        'data' => $data
+    ]);
+}
 
 
-
-
+public function receiveTasks()
+{
+    return response()->json([
+        'message' => 'Tasks fetched successfully',
+        'data' => $this->service->getTasksForReceive()
+    ]);
+}
 }

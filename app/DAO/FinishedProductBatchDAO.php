@@ -28,4 +28,11 @@ class FinishedProductBatchDAO
         $batch->save();
         return $batch;
     }
+
+    public function getTasksForReceive()
+{
+    return FinishedProductBatch::whereIn('status', ['sent', 'received'])
+        ->orderBy('created_at', 'desc')
+        ->get();
+}
 }

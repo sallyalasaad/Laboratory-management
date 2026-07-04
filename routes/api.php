@@ -22,8 +22,8 @@ use App\Http\Controllers\ForecastController;
 
 //////////////////////////////////////////////////////////
 
-Route::get('/forecast', [ForecastController::class, 'forecast']);
-
+Route::get('/forecast', [ForecastController::class, 'forecast'])
+    ->middleware(['auth', 'role:admin|accountant']);
 // تسجيل الدخول
 //////////////////////////////////////////////////////////
 
@@ -276,6 +276,9 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper']
 
     // Get returned items from drivers
     Route::get('/returned-items', [FinishedProductWarehouseController::class, 'getReturnedItems']);
+
+    // Display expired finished product batches (اتلاف)
+    Route::get('/finished-products/expired', [FinishedProductWarehouseController::class, 'expired']);
 
     // Accept returned item
     Route::post('/warehouse/returns/accept-all/{driverId}', [FinishedProductWarehouseController::class, 'acceptReturnedItem']);

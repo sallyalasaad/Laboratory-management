@@ -75,7 +75,10 @@ public function receiveBatch($batchId) {
     ]);
 }
 
-
+public function getTasksForReceive()
+{
+    return $this->dao->getTasksForReceive();
+}
 
 
 

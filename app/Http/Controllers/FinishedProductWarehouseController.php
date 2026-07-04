@@ -130,4 +130,19 @@ class FinishedProductWarehouseController extends Controller
         ], 400);
     }
 }
+    // عرض الدفعات المنتهية الصلاحية (اتلاف)
+    public function expired(Request $request)
+    {
+        if (!$this->authorizeUser()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $result = $this->service->اتلاف();
+
+        return response()->json([
+            'message' => 'Expired batches retrieved successfully',
+            'data' => $result['data'],
+            'summary' => $result['summary']
+        ], 200);
+    }
 }

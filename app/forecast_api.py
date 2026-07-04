@@ -1,17 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import pandas as pd
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
+import pickle
+import os
 import warnings
-import math
 
 warnings.filterwarnings("ignore")
 
 app = FastAPI()
 
-# 🔴 سعة الطبخة الواحدة
+# =========================
+# Config
+# =========================
 BATCH_OUTPUT = 750
 
-# 🔴 وصفة الطبخة
 RECIPE = {
     "Kashkaval Milk (kg)": 250,
     "Butter (kg)": 100,
@@ -22,7 +23,6 @@ RECIPE = {
     "Water (kg)": 130
 }
 
-# رمضان
 ramadan_dates = {
     2023: ["2023-03-23", "2023-04-20"],
     2024: ["2024-03-11", "2024-04-09"],
@@ -32,201 +32,164 @@ ramadan_dates = {
     2028: ["2028-01-28", "2028-02-26"]
 }
 
+size_to_kg = {
+    "350g": 0.35,
+    "1kg": 1,
+    "3kg": 3,
+    "5kg": 5
+}
 
-def remove_past_ramadan_effect(row):
-    year = row['month'].year
-    month_start = row['month']
-    month_end = row['month'] + pd.offsets.MonthEnd(0)
+# =========================
+# Load models
+# =========================
+def load_models_and_metadata():
+    metadata_path = "models/metadata.pkl"
 
-    if year in ramadan_dates:
-        ram_start = pd.to_datetime(ramadan_dates[year][0])
-        ram_end = pd.to_datetime(ramadan_dates[year][1])
+    if not os.path.exists(metadata_path):
+        raise RuntimeError("Models not trained yet. Run train.py first.")
 
-        overlap_start = max(month_start, ram_start)
-        overlap_end = min(month_end, ram_end)
+    with open(metadata_path, "rb") as f:
+        metadata = pickle.load(f)
 
-        days_ramadan = max(
-            (overlap_end - overlap_start).days + 1,
-            0
-        )
+    if "sizes" not in metadata:
+        raise RuntimeError("Metadata missing 'sizes' key")
 
-        ramadan_fraction = (
-            days_ramadan / month_end.day
-        )
+    models = {}
 
-        if ramadan_fraction > 0:
-            return row['quantity'] / (
-                1 + 2 * ramadan_fraction
-            )
+    for size in metadata["sizes"]:
+        model_path = f"models/es_model_{size}.pkl"
 
-    return row['quantity']
+        if not os.path.exists(model_path):
+            raise RuntimeError(f"Missing model file: {model_path}")
+
+        with open(model_path, "rb") as f:
+            models[size] = pickle.load(f)
+
+    return models, metadata
 
 
+# =========================
+# Startup load
+# =========================
+try:
+    MODELS, METADATA = load_models_and_metadata()
+except Exception as e:
+    print(f"[WARNING] {e}")
+    MODELS, METADATA = {}, {}
+
+# =========================
+# API
+# =========================
 @app.get("/forecast")
 def forecast(target_month: str):
 
-    data = pd.read_csv(
-        r"C:\Users\dell\Desktop\Laboratory-management\app\cheese_monthly.csv"
-    )
+    if not MODELS or not METADATA:
+        raise HTTPException(
+            status_code=500,
+            detail="Models are not loaded. Run train.py first."
+        )
 
-    data['month'] = pd.to_datetime(data['month'])
+    # Validate date
+    try:
+        target_month_dt = pd.to_datetime(target_month)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Use YYYY-MM"
+        )
 
-    data['quantity_base'] = data.apply(
-        remove_past_ramadan_effect,
-        axis=1
-    )
+    # Validate metadata
+    if "last_month" not in METADATA:
+        raise HTTPException(
+            status_code=500,
+            detail="Metadata missing last_month"
+        )
 
-    size_to_kg = {
-        "350g": 0.35,
-        "1kg": 1,
-        "3kg": 3,
-        "5kg": 5
-    }
+    last_month = METADATA["last_month"]
 
-    total_cheese_kg = 0
-    results = []
-
-    last_month = data['month'].max()
-
-    target_month_dt = pd.to_datetime(
-        target_month
-    )
-
+    # Steps calculation
     steps = (
-        (target_month_dt.year -
-         last_month.year) * 12
-        +
-        (target_month_dt.month -
-         last_month.month)
+        (target_month_dt.year - last_month.year) * 12 +
+        (target_month_dt.month - last_month.month)
     )
 
     if steps <= 0:
         return {
-            "error":
-            "Target month already exists"
+            "error": f"Target month must be after {last_month.strftime('%Y-%m')}"
         }
 
-    for size in data['size'].unique():
+    total_cheese_kg = 0
+    results = []
 
-        df = data[
-            data['size'] == size
-        ].copy()
+    # =========================
+    # Forecast per size
+    # =========================
+    for size, model in MODELS.items():
 
-        df.set_index(
-            'month',
-            inplace=True
-        )
+        forecast_series = model.forecast(steps=steps)
 
-        model = ExponentialSmoothing(
-            df['quantity_base'],
-            trend='add',
-            seasonal='add',
-            seasonal_periods=12
-        )
+        # safe last value
+        forecast_value = float(forecast_series[-1])
 
-        fit = model.fit()
-
-        forecast_value = fit.forecast(
-            steps=steps
-        ).iloc[-1]
-
-        # تأثير رمضان
-        ramadan_fraction = 0.0
+        # Ramadan effect
         year = target_month_dt.year
-
         month_start = target_month_dt
-        month_end = (
-            target_month_dt
-            + pd.offsets.MonthEnd(0)
-        )
+        month_end = target_month_dt + pd.offsets.MonthEnd(0)
+
+        ramadan_fraction = 0.0
 
         if year in ramadan_dates:
+            ram_start = pd.to_datetime(ramadan_dates[year][0])
+            ram_end = pd.to_datetime(ramadan_dates[year][1])
 
-            ram_start = pd.to_datetime(
-                ramadan_dates[year][0]
-            )
+            overlap_start = max(month_start, ram_start)
+            overlap_end = min(month_end, ram_end)
 
-            ram_end = pd.to_datetime(
-                ramadan_dates[year][1]
-            )
+            days_ramadan = max((overlap_end - overlap_start).days + 1, 0)
 
-            overlap_start = max(
-                month_start,
-                ram_start
-            )
-
-            overlap_end = min(
-                month_end,
-                ram_end
-            )
-
-            days_ramadan = max(
-                (
-                    overlap_end
-                    - overlap_start
-                ).days + 1,
-                0
-            )
-
-            ramadan_fraction = (
-                days_ramadan
-                / month_end.day
-            )
+            ramadan_fraction = days_ramadan / max(month_end.day, 1)
 
             if ramadan_fraction > 0:
-                forecast_value *= (
-                    1 +
-                    2 * ramadan_fraction
-                )
+                forecast_value *= (1 + 2 * ramadan_fraction)
 
-        cheese_kg = (
-            forecast_value
-            *
-            size_to_kg.get(size, 1)
-        )
-
+        cheese_kg = forecast_value * size_to_kg.get(size, 1)
         total_cheese_kg += cheese_kg
+
         results.append({
             "size": size,
-            "forecast":
-                round(forecast_value, 2),
-            "cheese_kg":
-                round(cheese_kg, 2)
+            "forecast": round(forecast_value, 2),
+            "cheese_kg": round(cheese_kg, 2)
         })
 
-    # ===== خطة الإنتاج (تعديل آخر طبخة فقط) =====
-
+    # =========================
+    # Production planning
+    # =========================
     full_batches = int(total_cheese_kg // BATCH_OUTPUT)
     remainder = total_cheese_kg % BATCH_OUTPUT
 
-    batches = full_batches
-    if remainder > 0:
-        batches += 1
+    batches = full_batches + (1 if remainder > 0 else 0)
 
     monthly_capacity = (full_batches * BATCH_OUTPUT) + remainder
-
     surplus = monthly_capacity - total_cheese_kg
 
-    materials = {}
+    materials = {
+        material: qty * batches
+        for material, qty in RECIPE.items()
+    }
 
-    for material, qty in RECIPE.items():
-        materials[material] = (
-            qty * batches
-        )
+    schedule = (
+        f"1 batch every {round(30 / batches, 1)} days"
+        if batches > 0
+        else "No production scheduled"
+    )
 
     return {
         "month": target_month,
-        "production_kg":
-            round(total_cheese_kg, 2),
+        "production_kg": round(total_cheese_kg, 2),
         "batches": batches,
-        "monthly_capacity":
-            monthly_capacity,
-        "surplus":
-            round(surplus, 2),
-        "schedule":
-            f"1 batch every {round(30 / batches, 1)} days",
-        "materials":
-            materials,
-        "forecast":
-            results
+        "monthly_capacity": round(monthly_capacity, 2),
+        "surplus": round(surplus, 2),
+        "schedule": schedule,
+        "materials": materials,
+        "forecast": results
     }
