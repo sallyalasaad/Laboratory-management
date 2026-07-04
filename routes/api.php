@@ -122,9 +122,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:production_employee|admin|super_admin')
         ->get('/production/received-materials', [RawMaterialTaskController::class, 'listProductionConfirmedMaterials']);
 
-Route::middleware('role:production_employee|admin|super_admin')
-        ->get('/raw-material-tasks/sent-materials/all', [RawMaterialTaskController::class, 'listAllSentMaterials']);
-
 });
 
 //////////////////////////////////////////////////////////
@@ -414,5 +411,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // يتم التقييد بصلاحية موظف المستودع أو المدير
     Route::middleware('role:product_storekeeper|admin|super_admin')
         ->post('/finished-product-batches/{id}/receive', [FinishedProductBatchController::class, 'receive']);
+       Route::middleware('role:product_storekeeper|admin|super_admin')
+        ->get('/finished-product-tasks/receive-tasks', 
+[FinishedProductBatchController::class, 'receiveTasks']);
 
 });
