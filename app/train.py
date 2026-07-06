@@ -41,7 +41,7 @@ def train_and_save_models():
     os.makedirs("models", exist_ok=True)
 
     # مسار ملف البيانات
-    csv_path = r"C:\Users\dell\Desktop\Laboratory-management\app\cheese_monthly.csv"
+    csv_path = r"C:\Users\dell\Desktop\Laboratory-management\app\cheese_monthly.csv
     data = pd.read_csv(csv_path)
     data['month'] = pd.to_datetime(data['month'])
 
@@ -83,3 +83,14 @@ def train_and_save_models():
 
 if __name__ == "__main__":
     train_and_save_models()
+from fastapi import FastAPI, HTTPException
+
+app = FastAPI()
+
+@app.get("/forecast")
+async def forecast(target_month: str):
+    try:
+        # هنا ضع الكود الخاص بك الذي يقوم بعملية التوقعات
+        ...
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

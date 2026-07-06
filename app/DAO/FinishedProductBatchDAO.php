@@ -35,4 +35,5 @@ class FinishedProductBatchDAO
         ->orderBy('created_at', 'desc')
         ->get();
 }
+
 }

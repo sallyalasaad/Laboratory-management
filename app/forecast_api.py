@@ -73,10 +73,11 @@ def load_models_and_metadata():
 # =========================
 try:
     MODELS, METADATA = load_models_and_metadata()
+    print("Models loaded successfully")
 except Exception as e:
-    print(f"[WARNING] {e}")
-    MODELS, METADATA = {}, {}
-
+    import traceback
+    traceback.print_exc()
+    raise
 # =========================
 # API
 # =========================
@@ -129,8 +130,7 @@ def forecast(target_month: str):
         forecast_series = model.forecast(steps=steps)
 
         # safe last value
-        forecast_value = float(forecast_series[-1])
-
+        forecast_value = float(forecast_series.iloc[-1])
         # Ramadan effect
         year = target_month_dt.year
         month_start = target_month_dt
