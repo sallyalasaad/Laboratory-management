@@ -17,3 +17,7 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+__pycache__/
+*.pyc
+*.pkl
+*.whl
