@@ -19,6 +19,7 @@ use App\Http\Controllers\StoreController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\DistributionTaskController;
 use App\Http\Controllers\ForecastController;
+use App\Http\Controllers\SettlementController;
 
 //////////////////////////////////////////////////////////
 
@@ -419,3 +420,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
 [FinishedProductBatchController::class, 'receiveTasks']);
 
 });
+
+Route::middleware(['auth:sanctum'])->group(function () {
+    //عرض تصفية سائق معين
+ Route::middleware('role:accountant|admin|super_admin')
+ ->get('/settlement/summary/{driverId}', [App\Http\Controllers\SettlementController::class, 'getSummary']);
+});
+
+
