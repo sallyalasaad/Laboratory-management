@@ -425,6 +425,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     //عرض تصفية سائق معين
  Route::middleware('role:accountant|admin|super_admin')
  ->get('/settlement/summary/{driverId}', [App\Http\Controllers\SettlementController::class, 'getSummary']);
+ //انهاء  تصفية
+ Route::middleware('role:accountant|admin|super_admin')
+ ->post('/settlement/finalize/{driverId}', [App\Http\Controllers\SettlementController::class, 'finalize']);
+
+//عرض لكل السائقيت تصفية
+ Route::middleware('role:accountant|admin|super_admin')
+ ->get('/settlements/all', [App\Http\Controllers\SettlementController::class, 'index']);
+
 });
 
 
