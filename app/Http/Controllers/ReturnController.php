@@ -92,6 +92,15 @@ class ReturnController extends Controller
         ]);
     }
 
+// داخل App\Http\Controllers\ReturnController.php
 
+public function allDriversStocks()
+{
+    $data = $this->service->getAllDriversInventory();
+    return response()->json([
+        'ok' => true,
+        'data' => $data
+    ]);
+}
 
 }

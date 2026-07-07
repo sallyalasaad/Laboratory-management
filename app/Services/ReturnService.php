@@ -173,7 +173,29 @@ class ReturnService
         }
 
         return $report;
-    }
+    }// داخل App\Services\ReturnService.php
 
+public function getAllDriversInventory()
+{
+    $stocks = $this->dao->getAllDriversStocks();
+
+    return $stocks->map(function ($stock) {
+        return [
+            // جلب الاسم والـ ID مباشرة من علاقة الـ user
+            'driver_id'   => $stock->user_id,
+            'driver_name' => $stock->user->name ?? 'غير معروف',
+            
+            // قمنا بإزالة حقل car_number
+            
+            'items' => $stock->items->map(function ($item) {
+                return [
+                    'product_name' => $item->batch?->finishedProduct?->name ?? 'غير معروف',
+                    'quantity'     => (float) $item->remaining_quantity,
+                    'unit'         => $item->batch?->finishedProduct?->unit ?? ''
+                ];
+            })
+        ];
+    });
+}
 
 }

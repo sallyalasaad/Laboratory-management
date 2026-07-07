@@ -69,6 +69,14 @@ class ReturnDAO
                 return $item->finished_product_batch_id;
             });
     }
+// داخل App\DAO\ReturnDAO.php
 
+public function getAllDriversStocks()
+{
+    // جلب جميع المخازن النشطة مع بيانات السائق والمنتجات
+    return \App\Models\CarStock::with(['user', 'items.batch.finishedProduct'])
+        ->where('status', 'active') 
+        ->get();
+}
 
 }

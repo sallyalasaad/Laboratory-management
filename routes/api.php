@@ -269,9 +269,7 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper']
     // Display finished products list
     Route::get('/finished-products-list', [FinishedProductWarehouseController::class, 'listFinishedProducts']);
 
-    // Display all finished products in warehouse
-    Route::get('/finished-products', [FinishedProductWarehouseController::class, 'getAllFinishedProducts']);
-
+    
     // Display product details with batch information
     Route::get('/finished-products/{productId}/details', [FinishedProductWarehouseController::class, 'getProductDetails']);
 
@@ -286,6 +284,15 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper']
 
 });
 
+Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper|accountant'])->group(function () {
+
+
+// Display all finished products in warehouse
+     Route::get('/finished-products', [FinishedProductWarehouseController::class, 'getAllFinishedProducts']);
+
+
+
+});
 //////////////////////////////////////////////////////////
 // Distribution Tasks
 //////////////////////////////////////////////////////////
@@ -429,9 +436,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
  Route::middleware('role:accountant|admin|super_admin')
  ->post('/settlement/finalize/{driverId}', [App\Http\Controllers\SettlementController::class, 'finalize']);
 
-//عرض لكل السائقيت تصفية
+//عرض لكل السائقين تصفية
  Route::middleware('role:accountant|admin|super_admin')
  ->get('/settlements/all', [App\Http\Controllers\SettlementController::class, 'index']);
+
+//عرض مخازن السائقين
+  Route::middleware('role:accountant|admin|super_admin')
+ ->get('/inventory/all-drivers', [App\Http\Controllers\ReturnController::class, 'allDriversStocks']);
 
 });
 
