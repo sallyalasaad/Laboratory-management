@@ -29,4 +29,12 @@ class SalesReportService
 
         return $this->dao->getMonthlySales($driverId, $month, $year);
     }
+    // داخل App\Services\SalesReportService.php
+
+public function allDriversMonthlySales($month, $year)
+{
+    return $this->dao->getAllDriversMonthlySales($month, $year);
 }
+}
+
+

@@ -59,4 +59,29 @@ class SalesReportController extends Controller
             'data' => $data
         ]);
     }
+
+// داخل App\Http\Controllers\SalesReportController.php
+
+public function allDriversMonthly(Request $request)
+{
+    $request->validate([
+        'month' => 'required|integer|min:1|max:12',
+        'year' => 'nullable|integer'
+    ]);
+
+    $data = $this->service->allDriversMonthlySales(
+        $request->month,
+        $request->year ?? date('Y')
+    );
+
+    return response()->json([
+        'month' => $request->month,
+        'year' => $request->year ?? date('Y'),
+        'data' => $data
+    ]);
+}
+
+
+
+
 }

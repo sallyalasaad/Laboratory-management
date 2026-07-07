@@ -443,7 +443,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
 //عرض مخازن السائقين
   Route::middleware('role:accountant|admin|super_admin')
  ->get('/inventory/all-drivers', [App\Http\Controllers\ReturnController::class, 'allDriversStocks']);
-
+//عرض المبيعات الشهرية
+  Route::middleware('role:accountant|admin|super_admin')
+ ->get('/sales/monthly/all', [SalesReportController::class, 'allDriversMonthly']);
 });
 
 

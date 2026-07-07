@@ -48,6 +48,31 @@ class SalesReportDAO
             )
             ->first();
     }
+// داخل App\DAO\SalesReportDAO.php
+
+public function getAllDriversMonthlySales($month, $year)
+{
+    return DB::table('sales')
+        ->join('users', 'users.id', '=', 'sales.user_id')
+        ->whereMonth('sales.date', $month)
+        ->whereYear('sales.date', $year)
+        ->where('sales.status', 'confirmed')
+        ->select(
+            'users.id as driver_id',
+            'users.name as driver_name',
+            DB::raw('COUNT(sales.id) as invoices_count'),
+            DB::raw('SUM(sales.total_amount) as total_sales')
+        )
+        ->groupBy('users.id', 'users.name')
+        ->get();
+}
+
+
+
+
+
+
+
 }
 
 
