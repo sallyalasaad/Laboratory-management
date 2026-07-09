@@ -191,7 +191,7 @@ public function getAllDriversInventory()
                 return [
                     'product_name' => $item->batch?->finishedProduct?->name ?? 'غير معروف',
                     'quantity'     => (float) $item->remaining_quantity,
-                    'size' => $batch?->finishedProduct?->size ?? 'N/A', // تم التأكد من إضافته
+                     'size'         => $item->batch?->finishedProduct?->size ?? '',
                     'unit'         => $item->batch?->finishedProduct?->unit ?? ''
                 ];
             })
