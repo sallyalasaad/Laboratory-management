@@ -133,6 +133,7 @@ class InvoiceService
                     return [
                         'product_id' => $batch?->finishedProduct?->id,
                         'product_name' => $batch?->finishedProduct?->name ?? 'Unknown',
+                        'size'         => $batch?->finishedProduct?->size ?? 'N/A', // تم التأكد من إضافته
                         'quantity' => (float) $item->quantity,
                         'price' => (float) $item->price,
                         'total' => (float) $item->quantity * (float) $item->price,
@@ -168,7 +169,9 @@ class InvoiceService
                     $batch = $batches[$item->finished_product_batch_id] ?? null;
 
                     return [
+                        'product_id'   => $batch?->finished_product_id, // تم التأكد من إضافته
                         'product_name' => $batch?->finishedProduct?->name ?? 'Unknown',
+                        'size'         => $batch?->finishedProduct?->size ?? 'N/A', // تم التأكد من إضافته
                         'quantity' => (float) $item->quantity,
                         'total' => (float) $item->quantity * (float) $item->price,
                     ];
