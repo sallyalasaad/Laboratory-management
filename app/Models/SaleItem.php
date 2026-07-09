@@ -20,4 +20,5 @@ class SaleItem extends Model
     {
         return $this->belongsTo(CarStockItem::class);
     }
+    
 }

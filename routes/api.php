@@ -20,6 +20,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\DistributionTaskController;
 use App\Http\Controllers\ForecastController;
 use App\Http\Controllers\SettlementController;
+use App\Http\Controllers\ProfitController;
 
 //////////////////////////////////////////////////////////
 
@@ -446,6 +447,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
 //عرض المبيعات الشهرية
   Route::middleware('role:accountant|admin|super_admin')
  ->get('/sales/monthly/all', [SalesReportController::class, 'allDriversMonthly']);
+//الربح الشهري
+       Route::middleware('role:accountant|admin|super_admin')
+ ->post('/reports/profit', [ProfitController::class, 'getReport']);
+
 });
 
 

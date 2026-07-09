@@ -83,63 +83,52 @@ class FinishedProductReceiveController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
-    }public function showReceiveItems(Request $request)
+    }
+    public function showReceiveItems(Request $request)
 {
     $tasks = FinishedProductTask::where('driver_id', $request->user()->id)
         ->whereIn('status', ['sent', 'received'])
+        ->orderBy('created_at', 'desc') // ترتيب الأحدث للأقدم
         ->get();
 
     if ($tasks->isEmpty()) {
         return response()->json([
             'ok' => false,
-            'message' => 'No tasks ready for receive'
+            'message' => 'لا توجد مهام حالياً'
         ], 404);
     }
 
-    $groups = [];
-
-    foreach ($tasks as $task) {
-
+    $groups = $tasks->map(function ($task) {
         $allocations = collect($task->details['allocations'] ?? []);
 
+        // جلب بيانات الـ Batches دفعة واحدة
         $batches = \App\Models\FinishedProductBatch::with('finishedProduct')
             ->whereIn('id', $allocations->pluck('batch_id'))
             ->get()
             ->keyBy('id');
 
         $items = $allocations->map(function ($item) use ($batches) {
-
             $batch = $batches[$item['batch_id']] ?? null;
-
             return [
-                'product_name' => $batch?->finishedProduct?->name,
-                'size' => $batch?->finishedProduct?->size,
-                'quantity' => $item['quantity'],
+                'product_name' => $batch?->finishedProduct?->name ?? 'غير معروف',
+                'size'         => $batch?->finishedProduct?->size,
+                'quantity'     => $item['quantity'],
                 'batch_number' => $batch?->batch_number,
             ];
         });
 
-        $date = $task->sent_at
-            ? \Carbon\Carbon::parse($task->sent_at)->format('Y-m-d')
-            : $task->created_at->format('Y-m-d');
-        $groups[] = [
-            'task_id' => $task->id,
+        $isConfirmed = $task->status === 'received';
+        $date = ($task->sent_at ? \Carbon\Carbon::parse($task->sent_at) : $task->created_at)->format('Y-m-d');
 
-            // 🔥 حالة المهمة
-            'status' => $task->status,
-
-            // 🔥 هل تم التأكيد؟
-            'is_confirmed' => $task->status === 'received',
-
-            'title' => $task->status === 'received'
-                ? "مواد مؤكدة – " . $date
-                : "بانتظار التأكيد – " . $date,
-
-            'date' => $date,
-
-            'items' => $items->values()
+        return [
+            'task_id'      => $task->id,
+            'status'       => $task->status,
+            'is_confirmed' => $isConfirmed,
+            'title'        => $isConfirmed ? "مواد مؤكدة (تم الاستلام)" : "بانتظار التأكيد (جديدة)",
+            'date'         => $date,
+            'items'        => $items->values()
         ];
-    }
+    });
 
     return response()->json([
         'ok' => true,

@@ -41,7 +41,7 @@ def train_and_save_models():
     os.makedirs("models", exist_ok=True)
 
     # مسار ملف البيانات
-    csv_path = r"C:\xampp\htdocs\Laboratory-management\app\cheese_monthly.csv"
+    csv_path = r"C:\Users\ev\Music\Laboratory-management\app\cheese_monthly.csv"
     data = pd.read_csv(csv_path)
     data['month'] = pd.to_datetime(data['month'])
 
