@@ -99,7 +99,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/tasks/raw-materials/{id}/confirm-send', [RawMaterialTaskController::class, 'confirmSend']);
 
     // inventory summary
-    Route::get('/inventory/summary', [RawMaterialTaskController::class, 'inventorySummary']);
+    Route::middleware(['role:admin|raw_storekeeper|accountant'])->get('/inventory/summary', [RawMaterialTaskController::class, 'inventorySummary']);
 
     // Notes for raw material tasks
     Route::middleware([ 'role:raw_storekeeper|product_storekeeper|accountant|production_employee|driver'])->post('/tasks/raw-materials/notes', [RawMaterialTaskController::class, 'addNote']);
@@ -270,7 +270,7 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin|product_storekeeper']
     // Display finished products list
     Route::get('/finished-products-list', [FinishedProductWarehouseController::class, 'listFinishedProducts']);
 
-    
+
     // Display product details with batch information
     Route::get('/finished-products/{productId}/details', [FinishedProductWarehouseController::class, 'getProductDetails']);
 
@@ -427,7 +427,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:product_storekeeper|admin|super_admin')
         ->post('/finished-product-batches/{id}/receive', [FinishedProductBatchController::class, 'receive']);
        Route::middleware('role:product_storekeeper|admin|super_admin')
-        ->get('/finished-product-tasks/receive-tasks', 
+        ->get('/finished-product-tasks/receive-tasks',
 [FinishedProductBatchController::class, 'receiveTasks']);
 
 });
