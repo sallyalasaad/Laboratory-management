@@ -306,7 +306,6 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
         Route::post('/', [DistributionTaskController::class, 'store']);
 
         //عرض السائقين
-        Route::get('/drivers', [DistributionTaskController::class, 'drivers']);
 
         //عرض المناطق
         Route::get('/regions', [RegionController::class, 'index']);
@@ -348,7 +347,11 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
 //عرض الفواتير الشهرية لسائق معين
         Route::get('/invoices/monthly/{driverId}/{month}', [InvoiceController::class, 'monthly']);
     });
+    Route::middleware(['auth:sanctum', 'role:accountant|admin|super_admin'])
+     ->group(function () {
+                Route::get('/drivers', [DistributionTaskController::class, 'drivers']);
 
+});
 //////////////////////////////////////////////////////////
 // Driver
 //////////////////////////////////////////////////////////
