@@ -83,64 +83,67 @@ class FinishedProductReceiveController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
-    }
-    public function showReceiveItems(Request $request)
+    }public function showReceiveItems(Request $request)
 {
-    $confirmedTasks = FinishedProductTask::where('driver_id', $request->user()->id)
-        ->where('status', 'received')
+    $tasks = FinishedProductTask::where('driver_id', $request->user()->id)
+        ->whereIn('status', ['sent', 'received'])
         ->get();
 
-    $pendingTasks = FinishedProductTask::where('driver_id', $request->user()->id)
-        ->where('status', 'sent')
-        ->get();
+    if ($tasks->isEmpty()) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'No tasks ready for receive'
+        ], 404);
+    }
 
-    $formatTasks = function ($tasks) {
-        $groups = [];
-        foreach ($tasks as $task) {
-            $allocations = collect($task->details['allocations'] ?? []);
+    $groups = [];
 
-            $batches = AppModelsFinishedProductBatch::with('finishedProduct')
-                ->whereIn('id', $allocations->pluck('batch_id'))
-                ->get()
-                ->keyBy('id');
+    foreach ($tasks as $task) {
 
-            $items = $allocations->map(function ($item) use ($batches) {
-                $batch = $batches[$item['batch_id']] ?? null;
+        $allocations = collect($task->details['allocations'] ?? []);
 
-                return [
-                    'product_name' => $batch?->finishedProduct?->name,
-                    'size' => $batch?->finishedProduct?->size,
-                    'quantity' => $item['quantity'],
-                    'batch_number' => $batch?->batch_number,
-                ];
-            });
+        $batches = \App\Models\FinishedProductBatch::with('finishedProduct')
+            ->whereIn('id', $allocations->pluck('batch_id'))
+            ->get()
+            ->keyBy('id');
 
-            $date = $task->sent_at
-                ? CarbonCarbon::parse($task->sent_at)->format('Y-m-d')
-                : $task->created_at->format('Y-m-d');
+        $items = $allocations->map(function ($item) use ($batches) {
 
-            $groups[] = [
-                'task_id' => $task->id,
-                'status' => $task->status,
-                'is_confirmed' => $task->status === 'received',
-                'title' => $task->status === 'received'
-                    ? "مواد مؤكدة – " . $date
-                    : "بانتظار التأكيد – " . $date,
-                'date' => $date,
-                'items' => $items->values()
+            $batch = $batches[$item['batch_id']] ?? null;
+
+            return [
+                'product_name' => $batch?->finishedProduct?->name,
+                'size' => $batch?->finishedProduct?->size,
+                'quantity' => $item['quantity'],
+                'batch_number' => $batch?->batch_number,
             ];
-        }
-        return $groups;
-    };
+        });
 
-    $confirmedGroups = $formatTasks($confirmedTasks);
-    $pendingGroups = $formatTasks($pendingTasks);
+        $date = $task->sent_at
+            ? \Carbon\Carbon::parse($task->sent_at)->format('Y-m-d')
+            : $task->created_at->format('Y-m-d');
+        $groups[] = [
+            'task_id' => $task->id,
+
+            // 🔥 حالة المهمة
+            'status' => $task->status,
+
+            // 🔥 هل تم التأكيد؟
+            'is_confirmed' => $task->status === 'received',
+
+            'title' => $task->status === 'received'
+                ? "مواد مؤكدة – " . $date
+                : "بانتظار التأكيد – " . $date,
+
+            'date' => $date,
+
+            'items' => $items->values()
+        ];
+    }
 
     return response()->json([
         'ok' => true,
-        'confirmed' => $confirmedGroups,
-        'pending' => $pendingGroups,
+        'groups' => $groups
     ]);
 }
-
 }
