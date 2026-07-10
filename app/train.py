@@ -40,8 +40,13 @@ def train_and_save_models():
     # إنشاء مجلد حفظ النماذج إذا لم يكن موجوداً
     os.makedirs("models", exist_ok=True)
 
-    # مسار ملف البيانات
-    csv_path = r"C:\Users\ev\Music\Laboratory-management\app\cheese_monthly.csv"
+    # مسار ملف البيانات داخل المشروع
+    base_dir = os.path.dirname(__file__)
+    csv_path = os.path.join(base_dir, 'cheese_monthly.csv')
+
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV file not found: {csv_path}")
+
     data = pd.read_csv(csv_path)
     data['month'] = pd.to_datetime(data['month'])
 
