@@ -26,6 +26,9 @@ use App\Http\Controllers\ProfitController;
 
 Route::get('/forecast', [ForecastController::class, 'forecast'])
     ->middleware(['auth', 'role:admin|accountant']);
+
+Route::get('/forecast/saved/{month}', [ForecastController::class, 'showSavedForecast'])
+    ->middleware(['auth', 'role:admin|accountant']);
 // تسجيل الدخول
 //////////////////////////////////////////////////////////
 

@@ -23,7 +23,7 @@ class FinishedProductWarehouseController extends Controller
     {
         $user = Auth::user();
 
-        if (!($user->hasRole('admin') || $user->hasRole('super_admin') || $user->hasRole('product_storekeeper'))) {
+        if (!($user->hasRole('admin') || $user->hasRole('super_admin') || $user->hasRole('accountant') || $user->hasRole('product_storekeeper'))) {
             return false;
         }
 
