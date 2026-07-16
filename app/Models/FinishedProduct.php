@@ -17,4 +17,12 @@ class FinishedProduct extends Model
     }
 
 
+public function getAvailableStockAttribute()
+{
+    // يحسب مجموع الكميات المتبقية للدفوعات التي تم استلامها فقط
+    return $this->batches()
+        ->where('status', 'received')
+        ->sum('remaining_quantity');
+}
+
 }
