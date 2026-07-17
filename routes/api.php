@@ -345,8 +345,6 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
 
                 //عرض المبيعات الشهرية لسائق معين
         Route::post('/reports/monthly-sales', [SalesReportController::class, 'monthly']);
-//عرض الفواتير اليومية لسائق معين
-        Route::get('/invoices/daily/{driverId}', [InvoiceController::class, 'daily']);
     });
     Route::middleware(['auth:sanctum', 'role:accountant|admin|super_admin'])
      ->group(function () {
@@ -355,6 +353,8 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
 
         Route::get('/invoices/monthly/{driverId}/{month}', [InvoiceController::class, 'monthly']);
 
+//عرض الفواتير اليومية لسائق معين
+        Route::get('/invoices/daily/{driverId}', [InvoiceController::class, 'daily']);
 });
 //////////////////////////////////////////////////////////
 // Driver
