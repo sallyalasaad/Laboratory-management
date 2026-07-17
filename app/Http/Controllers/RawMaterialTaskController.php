@@ -629,6 +629,71 @@ class RawMaterialTaskController extends Controller
         'summary' => $summary
     ]);
 }
+public function listAllProductionMaterials(Request $request)
+{
+    $user = Auth::user();
 
+    // 1. التحقق من الصلاحيات
+    if (!$user->hasRole('production_employee') && !$user->hasRole('admin') && !$user->hasRole('super_admin')) {
+        return response()->json(['message' => 'Unauthorized'], 403);
+    }
+
+    // 2. جلب جميع المهام المطلوبة (المكتملة والتي تم استلامها)
+    $tasks = RawMaterialTask::where('route', 'send_to_production')
+        ->whereIn('status', ['completed', 'received_by_production'])
+        ->with(['user', 'admin'])
+        ->orderBy('updated_at', 'desc')
+        ->get();
+
+    // 3. تنسيق البيانات (تجهيزها للفرونت إند)
+    $formatted = $tasks->map(function ($task) {
+        $details = $task->details ?? [];
+        $sentAllocations = $details['sent_allocations'] ?? [];
+
+        $allocationsWithDetails = [];
+        foreach ($sentAllocations as $alloc) {
+            $batch = RawMaterialBatch::with('rawMaterial')->find($alloc['batch_id']);
+            if ($batch) {
+                $allocationsWithDetails[] = [
+                    'raw_material_id' => $alloc['raw_material_id'],
+                    'raw_material_name' => $batch->rawMaterial->name ?? 'Unknown',
+                    'batch_number' => $batch->batch_number,
+                    'quantity' => $alloc['quantity'],
+                    'expiry_date' => $batch->expiry_date,
+                ];
+            }
+        }
+
+        // تحديد الحالة للمستخدم
+        $isConfirmed = ($task->status === 'received_by_production');
+        $productionEmployeeName = null;
+        if ($isConfirmed && !empty($details['production_received_by'])) {
+            $employee = User::find($details['production_received_by']);
+            $productionEmployeeName = $employee ? $employee->name : 'Unknown';
+        }
+
+        return [
+            'task_id'              => $task->id,
+            'status'               => $task->status, // الحالة الحقيقية (completed / received_by_production)
+            'is_confirmed'         => $isConfirmed,  // Boolean سهل للاستخدام في الفرونت إند
+            'sent_at'              => $task->sent_at,
+            'production_received_at' => $details['production_received_at'] ?? null,
+            'warehouse_keeper'     => $task->user->name ?? 'Unknown',
+            'confirmed_by'         => $productionEmployeeName,
+            'allocations'          => $allocationsWithDetails,
+            'total_quantity'       => collect($allocationsWithDetails)->sum('quantity'),
+        ];
+    });
+
+    // 4. تقسيم البيانات (عشان الفرونت إند يرتبهم بسهولة)
+    return response()->json([
+        'all_materials' => $formatted,
+        'summary' => [
+            'confirmed'   => $formatted->where('is_confirmed', true)->values(),
+            'unconfirmed' => $formatted->where('is_confirmed', false)->values(),
+            'total_count' => $formatted->count()
+        ]
+    ]);
+}
 }
 

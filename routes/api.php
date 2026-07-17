@@ -127,6 +127,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:production_employee|admin|super_admin')
         ->get('/production/received-materials', [RawMaterialTaskController::class, 'listProductionConfirmedMaterials']);
 
+        // عرض المواد الأولية المؤكد وغير المؤكد لموظف الإنتاج
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production/all-materials', [RawMaterialTaskController::class, 'listAllProductionMaterials']);
+
 });
 
 //////////////////////////////////////////////////////////
