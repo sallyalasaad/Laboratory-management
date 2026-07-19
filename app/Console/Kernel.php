@@ -15,6 +15,7 @@ class Kernel extends ConsoleKernel
         // تشغيل يوميًا عند منتصف الليل
         $schedule->command('orders:delete-completed')->daily();
 
+        $schedule->command('finished-products:check-expiry')->daily();
 
         $schedule->command('tasks:update-status')->everyMinute();
 
