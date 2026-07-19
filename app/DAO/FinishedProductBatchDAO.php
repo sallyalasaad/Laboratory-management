@@ -2,7 +2,8 @@
 namespace App\DAO;
 
 use App\Models\FinishedProductBatch;
-
+// بدلاً من السطر الخاطئ، اجعليه هكذا:
+use App\Models\FinishedProduct;
 class FinishedProductBatchDAO
 {
     public function create(array $data)
@@ -14,20 +15,21 @@ class FinishedProductBatchDAO
     {
         return FinishedProductBatch::where('production_order_id', $orderId)->get();
     }
-// دالة تحديث الحالة
-    public function updateStatus($id, string $status, array $additionalData = [])
-    {
-        $batch = FinishedProductBatch::findOrFail($id);
-        $batch->status = $status;
-        
-        // تحديث أي بيانات إضافية (مثل تفعيل الكمية عند الاستلام)
-        if (!empty($additionalData)) {
-            $batch->fill($additionalData);
-        }
-        
-        $batch->save();
-        return $batch;
+
+public function updateStatus($id, string $status, array$additionalData = [])
+{
+    $batch = FinishedProductBatch::findOrFail($id);
+    
+    $batch->status =$status;
+    
+    if (!empty($additionalData)) {
+        $batch->fill($additionalData);
     }
+    
+    $batch->save();
+    return $batch;
+}
+
 
     public function getTasksForReceive()
 {

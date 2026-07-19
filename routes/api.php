@@ -127,6 +127,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware('role:production_employee|admin|super_admin')
         ->get('/production/received-materials', [RawMaterialTaskController::class, 'listProductionConfirmedMaterials']);
 
+        // عرض المواد الأولية المؤكد وغير المؤكد لموظف الإنتاج
+    Route::middleware('role:production_employee|admin|super_admin')
+        ->get('/production/all-materials', [RawMaterialTaskController::class, 'listAllProductionMaterials']);
+
 });
 
 //////////////////////////////////////////////////////////
@@ -345,15 +349,16 @@ Route::middleware(['auth:sanctum', 'role:admin|super_admin'])
 
                 //عرض المبيعات الشهرية لسائق معين
         Route::post('/reports/monthly-sales', [SalesReportController::class, 'monthly']);
-//عرض الفواتير اليومية لسائق معين
-        Route::get('/invoices/daily/{driverId}', [InvoiceController::class, 'daily']);
-//عرض الفواتير الشهرية لسائق معين
-        Route::get('/invoices/monthly/{driverId}/{month}', [InvoiceController::class, 'monthly']);
     });
     Route::middleware(['auth:sanctum', 'role:accountant|admin|super_admin'])
      ->group(function () {
                 Route::get('/drivers', [DistributionTaskController::class, 'drivers']);
+                //عرض الفواتير الشهرية لسائق معين
 
+        Route::get('/invoices/monthly/{driverId}/{month}', [InvoiceController::class, 'monthly']);
+
+//عرض الفواتير اليومية لسائق معين
+        Route::get('/invoices/daily/{driverId}', [InvoiceController::class, 'daily']);
 });
 //////////////////////////////////////////////////////////
 // Driver
