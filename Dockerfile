@@ -4,7 +4,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 COPY . /var/www
 ENV APACHE_DOCUMENT_ROOT /var/www/public
-RUN sed -ri -s 's!/var/www/html!!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -s 's!/var/www/!!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+RUN sed -i -e 's|/var/www/html||g' /etc/apache2/sites-available/*.conf
+RUN sed -i -e 's|/var/www/||g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 EXPOSE 80
