@@ -21,6 +21,7 @@ use App\Http\Controllers\DistributionTaskController;
 use App\Http\Controllers\ForecastController;
 use App\Http\Controllers\SettlementController;
 use App\Http\Controllers\ProfitController;
+use App\Http\Controllers\NotificationController;
 
 //////////////////////////////////////////////////////////
 
@@ -30,6 +31,22 @@ Route::get('/forecast', [ForecastController::class, 'forecast'])
 Route::get('/forecast/saved/{month}', [ForecastController::class, 'showSavedForecast'])
     ->middleware(['auth', 'role:super_admin|accountant']);
 // تسجيل الدخول
+//////////////////////////////////////////////////////////
+Route::middleware('auth:sanctum')->group(function () {
+
+    Route::get('/notifications',
+        [NotificationController::class, 'index']
+    );
+
+    Route::put('/notifications/{id}/read',
+        [NotificationController::class, 'markAsRead']
+    );
+      Route::get('/notifications/unread-count',
+        [NotificationController::class, 'unreadCount']
+    );
+
+});
+
 //////////////////////////////////////////////////////////
 
 Route::post('/login', [AuthController::class,'login']);
@@ -102,7 +119,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/tasks/raw-materials/{id}/confirm-send', [RawMaterialTaskController::class, 'confirmSend']);
 
     // inventory summary
-    Route::middleware(['role:admin|raw_storekeeper|accountant'])->get('/inventory/summary', [RawMaterialTaskController::class, 'inventorySummary']);
+    Route::middleware(['role:admin|raw_storekeeper|super_admin|accountant'])->get('/inventory/summary', [RawMaterialTaskController::class, 'inventorySummary']);
 
     // Notes for raw material tasks
     Route::middleware([ 'role:raw_storekeeper|product_storekeeper|accountant|production_employee|driver'])->post('/tasks/raw-materials/notes', [RawMaterialTaskController::class, 'addNote']);
