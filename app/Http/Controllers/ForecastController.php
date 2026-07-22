@@ -23,7 +23,7 @@ class ForecastController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user || !in_array($user->role, ['admin', 'accountant'])) {
+        if (!$user || !in_array($user->role, ['super_admin', 'accountant'])) {
             return response()->json([
                 'ok' => false,
                 'message' => 'Unauthorized'
@@ -161,7 +161,7 @@ class ForecastController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user || !in_array($user->role, ['admin', 'accountant'])) {
+        if (!$user || !in_array($user->role, ['super_admin', 'accountant'])) {
             return response()->json([
                 'ok' => false,
                 'message' => 'Unauthorized'

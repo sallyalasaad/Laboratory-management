@@ -25,10 +25,10 @@ use App\Http\Controllers\ProfitController;
 //////////////////////////////////////////////////////////
 
 Route::get('/forecast', [ForecastController::class, 'forecast'])
-    ->middleware(['auth', 'role:admin|accountant']);
+    ->middleware(['auth', 'role:super_admin|accountant']);
 
 Route::get('/forecast/saved/{month}', [ForecastController::class, 'showSavedForecast'])
-    ->middleware(['auth', 'role:admin|accountant']);
+    ->middleware(['auth', 'role:super_admin|accountant']);
 // تسجيل الدخول
 //////////////////////////////////////////////////////////
 
