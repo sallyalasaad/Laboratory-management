@@ -188,24 +188,7 @@ def forecast(target_month: str):
         if batches > 0
         else "No production scheduled"
     )
-def load_models_and_metadata():
-    metadata_path = "models/metadata.pkl"
 
-    # إذا لمש تكن النماذج موجودة، قم بتشغيل سكريبت التدريب لتوليدها تلقائياً على السيرفر
-    if not os.path.exists(metadata_path):
-        from train import train_and_save_models
-        train_and_save_models()
-
-    with open(metadata_path, "rb") as f:
-        metadata = pickle.load(f)
-
-    models = {}
-    for size in metadata["sizes"]:
-        model_path = f"models/es_model_{size}.pkl"
-        with open(model_path, "rb") as f:
-            models[size] = pickle.load(f)
-
-    return models, metadata
     return {
         "month": target_month,
         "production_kg": round(total_cheese_kg, 2),
@@ -216,3 +199,4 @@ def load_models_and_metadata():
         "materials": materials,
         "forecast": results
     }
+    
