@@ -34,5 +34,5 @@ RUN sed -i 's!/var/www/html!/var/www/public!g' /etc/apache2/sites-available/000-
 RUN chown -R www-data:www-data /var/www \
     && chmod -R 775 /var/www/storage \
     && chmod -R 775 /var/www/bootstrap/cache
-
+RUN echo "SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=\$1" >> /etc/apache2/apache2.conf
 EXPOSE 80
