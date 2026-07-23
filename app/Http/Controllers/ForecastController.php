@@ -48,9 +48,9 @@ class ForecastController extends Controller
             ], 422);
         }
 
-        $response = Http::get('http://127.0.0.1:8001/forecast', [
-            'target_month' => $month
-        ]);
+       $response = Http::get('https://laboratory-management-1.onrender.com/forecast', [
+    'target_month' => $month
+]);
 
         if (!$response->successful()) {
             return response()->json([
