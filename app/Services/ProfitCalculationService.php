@@ -21,9 +21,9 @@ class ProfitCalculationService
 }private function getForecastDataFromAI($month)
     {
         try {
-            $response = Http::timeout(5)->get("http://127.0.0.1:8001/forecast", [
-                'target_month' => '2026-' . str_pad($month, 2, '0', STR_PAD_LEFT)
-            ]);
+            $response = Http::timeout(5)->get("https://laboratory-management-1.onrender.com/forecast", [
+    'target_month' => '2026-' . str_pad($month, 2, '0', STR_PAD_LEFT)
+]);
 
             if ($response->successful()) {
                 $data = $response->json();
