@@ -40,6 +40,9 @@ class FinishedProductExpiredApiTest extends TestCase
 
         $response = $this->getJson('/api/finished-products/expired');
 
+dump($response->status());
+dump($response->getContent());
+
         $response->assertStatus(200)
             ->assertJson([
                 'message' => 'Expired batches retrieved successfully',
