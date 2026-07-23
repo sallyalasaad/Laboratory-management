@@ -40,10 +40,15 @@ size_to_kg = {
 }
 
 # =========================
-# Load models
+# Load or Train models automatically
 # =========================
 def load_models_and_metadata():
     metadata_path = "models/metadata.pkl"
+
+    # إذا لم تكن النماذج موجودة على السيرفر، قم بتشغيل سكريبت التدريب لتوليدها تلقائياً
+    if not os.path.exists(metadata_path):
+        from train import train_and_save_models
+        train_and_save_models()
 
     if not os.path.exists(metadata_path):
         raise RuntimeError("Models not trained yet. Run train.py first.")
@@ -78,6 +83,7 @@ except Exception as e:
     import traceback
     traceback.print_exc()
     raise
+
 # =========================
 # API
 # =========================
