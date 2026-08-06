@@ -24,34 +24,36 @@ class SettlementService
             'total_cash' => $data['total_cash'],
             'message' => 'المرتجعات تذهب للمستودع مباشرة'
         ];
-    }
-    public function finalizeAndSync($driverId)
+    }public function finalizeAndSync($driverId)
     {
         return DB::transaction(function () use ($driverId) {
-            $task = $this->dao->getActiveTask($driverId);
+            // 1. بدلاً من البحث عن مهمة نشطة، سنبحث عن جميع المبيعات المؤكدة للسائق
+            // سنفترض أننا نريد تصفية كل المبيعات التي لم تأخذ حالة 'settled' بعد
+            $totalCollected = \App\Models\Sale::whereHas('distributionTask', function($query) use ($driverId) {
+                $query->where('user_id', $driverId);
+            })
+            ->where('status', 'confirmed')
+            // يمكنك إضافة شرط إضافي هنا: ->where('is_settled', false) 
+            ->sum('total_amount');
 
-            if (!$task) {
-                return ['success' => false, 'message' => 'لا توجد مهمة نشطة للسائق'];
+            if ($totalCollected <= 0) {
+                return ['success' => false, 'message' => 'لا توجد مبالغ مالية جديدة لتصفيتها'];
             }
 
-            // حساب المبيعات
-            $totalCollected = $this->dao->getConfirmedSalesAmount($task->id);
-
-            // إنهاء المهمة
-            $this->dao->updateTaskStatus($task->id, [
-                'status' => 'completed',
-                'end_time' => now()
-            ]);
+            // 2. هنا نقوم بعملية التصفية (تحديث حالة المبيعات لتصبح مصفاة)
+            \App\Models\Sale::whereHas('distributionTask', function($query) use ($driverId) {
+                $query->where('user_id', $driverId);
+            })
+            ->where('status', 'confirmed')
+            ->update(['status' => 'settled']); // نغير الحالة لـ settled حتى لا تُحسب مرة أخرى
 
             return [
                 'success' => true,
-                'message' => 'تم إنهاء التصفية بنجاح',
+                'message' => 'تم إنهاء التصفية بنجاح وتسليم المبلغ',
                 'total_cash_to_receive' => (float) $totalCollected
             ];
         });
     }
-    // App\Services\SettlementService.php
-
 public function getAllSettlements()
 {
     return $this->dao->getAllDriversSettlementData();

@@ -9,26 +9,21 @@ use App\Models\DistributionTask;
 class SettlementDAO{
 public function getDriverSettlementData($driverId)
 {
-    // هنا قمنا بتغيير driver_id إلى user_id ليطابق تعريف الموديل
+    // جلب آخر مهمة للسائق بدلاً من التقيد بـ in_progress
     $task = \App\Models\DistributionTask::where('user_id', $driverId)
-        ->where('status', 'in_progress')
+        ->latest()
         ->first();
 
     $visitedStoresCount = 0;
     $totalTargetStores = 0;
-    $totalCash = 0;
 
     if ($task) {
-        // حساب عدد المحلات المزارة
         $visitedStoresCount = $task->stores()->wherePivot('visited', true)->count();
-        // حساب إجمالي المحلات المطلوبة في هذه المهمة
         $totalTargetStores = $task->stores()->count();
-        
-        // حساب إجمالي مبالغ المبيعات المؤكدة لهذه المهمة
-        $totalCash = \App\Models\Sale::where('distribution_task_id', $task->id)
-            ->where('status', 'confirmed')
-            ->sum('total_amount');
     }
+
+    // هنا نستخدم الدالة الجديدة التي أضفتِها لجلب الكاش (المبيعات المؤكدة وغير المصفاة)
+    $totalCash = $this->getUnsettledSalesByDriver($driverId);
 
     return [
         'visited_stores' => $visitedStoresCount,
@@ -58,23 +53,28 @@ public function getActiveTask($driverId)
 
 public function getAllDriversSettlementData()
 {
-    return \App\Models\DistributionTask::where('status', 'in_progress')
-        ->with('user') // جلب بيانات السائق
+    return \App\Models\User::whereHas('distributionTasks')
         ->get()
-        ->map(function ($task) {
+        ->map(function ($user) {
+            $latestTask = \App\Models\DistributionTask::where('user_id', $user->id)->latest()->first();
+            
             return [
-                'driver_name' => $task->user->name ?? 'Unknown',
-                'points' => $task->stores()->wherePivot('visited', true)->count() . ' / ' . $task->stores()->count(),
-                'total_cash' => (float) \App\Models\Sale::where('distribution_task_id', $task->id)
-                                    ->where('status', 'confirmed')
-                                    ->sum('total_amount'),
-                'task_id' => $task->id,
-                'driver_id' => $task->user_id
+                'driver_name' => $user->name,
+                'points' => $latestTask ? ($latestTask->stores()->wherePivot('visited', true)->count() . ' / ' . $latestTask->stores()->count()) : '0 / 0',
+                'total_cash' => (float) $this->getUnsettledSalesByDriver($user->id),
+                'task_id' => $latestTask ? $latestTask->id : null,
+                'driver_id' => $user->id
             ];
         });
 }
 
-
-
+public function getUnsettledSalesByDriver($driverId)
+    {
+        return \App\Models\Sale::whereHas('distributionTask', function($query) use ($driverId) {
+            $query->where('user_id', $driverId);
+        })
+        ->where('status', 'confirmed')
+        ->sum('total_amount');
+    }
 
 }

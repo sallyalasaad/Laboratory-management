@@ -95,14 +95,27 @@ class ProductionStageController extends Controller
     =========================
     */
     public function completeStage($stageId)
-    {
-        $stage = $this->stageService->completeStage($stageId);
+{
+    $result = $this->stageService->completeStage($stageId);
 
-        return response()->json([
-            'message' => 'تم إنهاء المرحلة',
-            'next_stage' => $stage
-        ]);
+    if ($result['error'] ?? false) {
+        return response()->json($result, 422);
     }
+
+    // إذا كانت هذه المرحلة الأخيرة وانتهى الطلب
+    if ($result['is_completed'] ?? false) {
+        return response()->json([
+            'message' => $result['message'],
+            'order' => $result['order']
+        ], 200);
+    }
+
+    // إذا تم الانتقال للمرحلة التالية
+    return response()->json([
+        'message' => 'تم إنهاء المرحلة بنجاح والانتقال للمرحلة التالية',
+        'next_stage' => $result['next_stage']
+    ], 200);
+}
 
     /*
     =========================

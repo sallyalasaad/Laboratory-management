@@ -56,27 +56,37 @@ class ProductionStageService
         ];
     }
     public function completeStage($stageId)
-    {
-        $stage = $this->stageDao->findById($stageId);
-        if(!$stage || $stage->status !== 'active'){
-            return null;
-        }
-
-        $this->stageDao->updateStatus($stage, 'done');
-
-        $stages = $this->stageDao->findByOrderId($stage->production_order_id);
-        foreach($stages as $s){
-            if($s->status === 'pending'){
-                $this->stageDao->updateStatus($s, 'active');
-                return $s;
-            }
-        }
-
-        $order = $this->orderDao->findById($stage->production_order_id);
-        $this->orderDao->updateStatus($order, 'completed');
-
-        return null;
+{
+    $stage = $this->stageDao->findById($stageId);
+    if(!$stage || $stage->status !== 'active'){
+        return ['error' => true, 'message' => 'المرحلة غير نشطة أو غير موجودة'];
     }
+
+    $this->stageDao->updateStatus($stage, 'done');
+
+    $stages = $this->stageDao->findByOrderId($stage->production_order_id);
+    foreach($stages as $s){
+        if($s->status === 'pending'){
+            $this->stageDao->updateStatus($s, 'active');
+            return [
+                'error' => false,
+                'is_completed' => false,
+                'next_stage' => $s
+            ];
+        }
+    }
+
+    // إذا لم توجد مرحلة معلقة، فهذه هي المرحلة الأخيرة -> إكمال الطلب
+    $order = $this->orderDao->findById($stage->production_order_id);
+    $this->orderDao->updateStatus($order, 'completed');
+
+    return [
+        'error' => false,
+        'is_completed' => true,
+        'message' => 'تم إنهاء جميع مراحل الإنتاج وأصبح الطلب مكتملًا',
+        'order' => $order
+    ];
+}
 
     public function pauseOrder($orderId)
     {
