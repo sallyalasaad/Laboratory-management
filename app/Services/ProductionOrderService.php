@@ -26,7 +26,7 @@ class ProductionOrderService
                 'note' => $note
             ]);
 
-            $stages = ['تحضير', 'طبخ', 'تبريد', 'إرسال للمستودع'];
+$stages = ['طبخ', 'تبريد', 'تعبئة', 'إرسال'];
             foreach ($stages as $stage) {
                 ProductionStage::create([
                     'production_order_id' => $order->id,
