@@ -26,7 +26,7 @@ return new class extends Migration
             $table->date('date');
             $table->decimal('total_amount', 10, 2)->default(0);
 
-            $table->enum('status', ['draft', 'confirmed'])->default('draft');
+            $table->enum('status', ['draft', 'confirmed','settled'])->default('draft');
 
             $table->timestamps();
         });
