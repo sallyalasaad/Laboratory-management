@@ -1,6 +1,6 @@
 ﻿FROM php:8.2-apache
 
-# 1. تثبيت الحزم المطلوبة
+# 1. تثبيت الحزم المطلوبة (مع إضافة مكتبة zip)
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
@@ -38,17 +38,5 @@ RUN chown -R www-data:www-data /var/www \
 RUN echo "SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=\$1" >> /etc/apache2/apache2.conf
 EXPOSE 80
 
-# 6. إصلاح تعارض MPM وقت تشغيل الحاوية فعليًا (مشكلة معروفة بـ Railway)
+# 6. إصلاح تعارض MPM وقت تشغيل الحاوية فعليًا
 CMD ["bash", "-lc", "set -eux; a2dismod mpm_event mpm_worker || true; rm -f /etc/apache2/mods-enabled/mpm_event.* /etc/apache2/mods-enabled/mpm_worker.* || true; a2enmod mpm_prefork; apache2ctl -t; exec apache2-foreground"]
-# 1. تثبيت الحزم المطلوبة (مع إضافة مكتبة zip)
-RUN apt-get update && apt-get install -y \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    zip \
-    unzip \
-    git \
-    libonig-dev \
-    libxml2-dev \
-    libzip-dev \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
