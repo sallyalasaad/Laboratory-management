@@ -1,6 +1,6 @@
 ﻿FROM php:8.2-apache
 
-# 1. تثبيت الحزم المطلوبة (مع إضافة مكتبة zip)
+# 1. تثبيت الحزم المطلوبة وتفعيل امتدادات PHP
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
@@ -13,14 +13,12 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
-# 2. تفعيل mod_rewrite مهم جداً لـ Laravel
+# 2. تفعيل mod_rewrite لـ Laravel
 RUN a2enmod rewrite
 
-# 3. تثبيت Composer
+# 3. تثبيت Composer وتشغيل التثبيت
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
 WORKDIR /var/www
-
 COPY . /var/www
 
 ENV COMPOSER_ALLOW_SUPERUSER=1
@@ -31,12 +29,13 @@ RUN sed -i 's!/var/www/html!/var/www/public!g' /etc/apache2/sites-available/000-
     && sed -i 's!/var/www/html!/var/www/public!g' /etc/apache2/apache2.conf \
     && sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
-# 5. ضبط الصلاحيات
+# 5. ضبط الصلاحيات وترخيص الـ Authorization
 RUN chown -R www-data:www-data /var/www \
     && chmod -R 775 /var/www/storage \
     && chmod -R 775 /var/www/bootstrap/cache
 RUN echo "SetEnvIf Authorization \"(.*)\" HTTP_AUTHORIZATION=\$1" >> /etc/apache2/apache2.conf
+
 EXPOSE 80
 
-# 6. إصلاح تعارض MPM وقت تشغيل الحاوية فعليًا
+# 6. إصلاح تعارض MPM وقت تشغيل الحاوية في Railway
 CMD ["bash", "-lc", "set -eux; a2dismod mpm_event mpm_worker || true; rm -f /etc/apache2/mods-enabled/mpm_event.* /etc/apache2/mods-enabled/mpm_worker.* || true; a2enmod mpm_prefork; apache2ctl -t; exec apache2-foreground"]
