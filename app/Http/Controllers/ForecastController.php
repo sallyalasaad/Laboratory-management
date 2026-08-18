@@ -48,9 +48,12 @@ class ForecastController extends Controller
             ], 422);
         }
 
- $response = Http::get('https://laboratory-management-production-df54.up.railway.app/forecast', [
-    'target_month' => $month
-]);
+        // استخدام متغير البيئة لرابط خدمة بايثون مع fallback للمحلي
+        $forecastServiceUrl = env('FORECAST_SERVICE_URL', 'http://127.0.0.1:8001');
+
+        $response = Http::get($forecastServiceUrl . '/forecast', [
+            'target_month' => $month
+        ]);
 
         if (!$response->successful()) {
             return response()->json([
