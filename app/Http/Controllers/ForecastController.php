@@ -47,11 +47,11 @@ class ForecastController extends Controller
                 'message' => 'Invalid month format. Use YYYY-MM'
             ], 422);
         }
+$forecastServiceUrl = env('FORECAST_SERVICE_URL', 'http://127.0.0.1:8001');
 
- $response = Http::get('http://127.0.0.1:8001/forecast', [
+$response = Http::get($forecastServiceUrl . '/forecast', [
     'target_month' => $month
 ]);
-
         if (!$response->successful()) {
             return response()->json([
                 'ok' => false,
