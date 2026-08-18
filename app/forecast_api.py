@@ -14,11 +14,12 @@ app = FastAPI()
 BATCH_OUTPUT = 750
 
 RECIPE = {
-    "Kashkaval Milk (kg)": 250,
-    "Butter (kg)": 100,
-    "Salt (kg)": 150,
-    "Flavor (kg)": 10,
-    "Acid (kg)": 100,
+    "Kashkaval (kg)": 100,
+    "Milk (kg)": 250,
+    "Butter (kg)": 150,
+    "Salt (kg)": 10,
+    "Flavor (kg)": 100,
+    "Acid (kg)": 5,
     "Preservatives (kg)": 5,
     "Water (kg)": 130
 }
@@ -202,4 +203,3 @@ def forecast(target_month: str):
         "materials": materials,
         "forecast": results
     }
-    
