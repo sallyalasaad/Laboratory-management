@@ -47,7 +47,8 @@ class ForecastController extends Controller
                 'message' => 'Invalid month format. Use YYYY-MM'
             ], 422);
         }
- $response = Http::get('https://laboratory-management-production-df54.up.railway.app/forecast', [
+
+       $response = Http::get('https://laboratory-management-production-df54.up.railway.app/forecast', [
     'target_month' => $month
 ]);
 
