@@ -48,7 +48,7 @@ class ForecastController extends Controller
             ], 422);
         }
 
- $response = Http::get('https://laboratory-management-production-df54.up.railway.app/forecast', [
+ $response = Http::get('http://127.0.0.1:8001/forecast', [
     'target_month' => $month
 ]);
 
