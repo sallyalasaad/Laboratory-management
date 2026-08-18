@@ -48,12 +48,9 @@ class ForecastController extends Controller
             ], 422);
         }
 
-        // استخدام متغير البيئة لرابط خدمة بايثون مع fallback للمحلي
-        $forecastServiceUrl = env('FORECAST_SERVICE_URL', 'http://127.0.0.1:8001');
-
-        $response = Http::get($forecastServiceUrl . '/forecast', [
-            'target_month' => $month
-        ]);
+ $response = Http::get('http://127.0.0.1:8001/forecast', [
+    'target_month' => $month
+]);
 
         if (!$response->successful()) {
             return response()->json([
