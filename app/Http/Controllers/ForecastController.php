@@ -49,7 +49,7 @@ class ForecastController extends Controller
         }
 
 
-       $response = Http::get('http://127.0.0.1:8001/forecast', [
+       $response = Http::get('/forecast', [
 
     'target_month' => $month
 ]);
