@@ -48,11 +48,13 @@ class ForecastController extends Controller
             ], 422);
         }
 
+        // استخدام متغير البيئة لتحديد رابط خدمة بايثون بشكل مرن وصحيح
+        $forecastServiceUrl = env('FORECAST_SERVICE_URL', 'http://127.0.0.1:8001');
+        $endpoint = rtrim($forecastServiceUrl, '/') . '/forecast';
 
-       $response = Http::get('/forecast', [
-
-    'target_month' => $month
-]);
+        $response = Http::get($endpoint, [
+            'target_month' => $month
+        ]);
 
         if (!$response->successful()) {
             return response()->json([
